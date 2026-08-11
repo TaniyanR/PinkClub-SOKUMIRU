@@ -1,93 +1,54 @@
-# PinkClub SOKUMIRU
+# PinkClub-SOKUMIRU
 
-SOKUMIRUの商品情報を活用し、商品検索・ランキング・SEO・アクセス解析・管理機能を備えたアフィリエイト商品サイトを構築するプロジェクトです。
+SOKUMIRUアフィリエイトの商品を紹介する、PHP + MySQL/MariaDB製のサイトです。
+画面構成、管理、SEO、アクセス解析、RSS、相互リンク等はPinkClub-FANZAをベースにし、API部分をSOKUMIRU WEBサービスへ置き換えています。
 
-## 現在の状態
+## 対応API
 
-企画・仕様整理段階です。  
-現時点ではアプリケーションコードを実装していません。
+- 商品検索API: `https://sokmil-ad.com/api/v1/Item`
+- 出演者検索API: `https://sokmil-ad.com/api/v1/Actor`
+- カテゴリはアダルト動画（`av`）固定
+- 出演者は女性（`f`）固定
+- グラビア（`idol`）は取得しません
 
-## 開発方針
+ジャンル、メーカー、シリーズ、レーベル、監督は商品レスポンスの`iteminfo`から自動登録します。SOKUMIRUに存在しないFANZAフロアAPI・作者API等は使用しません。
 
-既存の [PinkClub FANZA](https://github.com/TaniyanR/PinkClub-FANZA) を機能面の基準とし、同等規模のSOKUMIRU対応サイトを目指します。
+## セットアップ
 
-ただし、GitHubのフォークは使用せず、独立したリポジトリとして開発します。FANZA固有のAPI仕様や名称をそのまま流用せず、SOKUMIRUの提供仕様を確認したうえで個別に設計・実装します。
+1. PHP 8.1以降、MySQL 8.0またはMariaDB、cURL・PDO MySQL・mbstringを用意します。
+2. `config.local.php`にDB接続情報を設定します。
+3. `php scripts/init_db.php`を実行するか、初回画面からDBを初期化します。
+4. 管理画面の「商品情報API設定」でSOKUMIRUのAPI KEYとアフィリエイトIDを保存します。
+5. テスト取得後、自動設定を有効にします。
 
-## 実装予定の主な機能
+API認証情報はリポジトリへ保存しないでください。環境変数を利用する場合は、`SOKUMIRU_API_KEY`と`SOKUMIRU_AFFILIATE_ID`を指定できます。
 
-### 公開サイト
+## APIデータの対応
 
-- 商品一覧・商品詳細
-- キーワード検索
-- ジャンル・出演者・メーカー・シリーズなどの分類ページ
-- 新着・おすすめ・人気ランキング
-- 関連商品の表示
-- サンプル画像・サンプル動画への対応
-- パンくず、canonical、OGP、構造化データ
-- sitemap.xml・robots.txt
-- PC・スマートフォン対応
+| SOKUMIRU | 保存先 |
+|---|---|
+| `id` | 商品ID・重複判定キー |
+| `title` | 商品名 |
+| `URL` / `affiliateURL` | 商品URL / アフィリエイトURL |
+| `imageURL` | 商品画像 |
+| `sampleImageURL` | サンプル画像 |
+| `sampleMovieURL.url` | サンプル動画 |
+| `prices` | 価格 |
+| `date` | 配信開始日 |
+| `iteminfo.actor` | 女優・出演者 |
+| `iteminfo.genre` | ジャンル |
+| `iteminfo.maker` | メーカー |
+| `iteminfo.series` | シリーズ |
+| `iteminfo.label` | レーベル |
+| `iteminfo.director` | 監督 |
 
-### 管理画面
+## クレジット
 
-- ログイン認証
-- SOKUMIRU API設定
-- API接続テスト・商品取得
-- 自動取得設定と実行履歴
-- 商品・分類データ管理
-- サイト基本設定
-- デザイン・広告設定
-- 固定ページ管理
-- 相互リンク・RSS管理
-- アクセス解析
-- アカウント設定
-- データベースのバックアップ
+公開ページのフッターにSOKUMIRU指定の`WEB SERVICE BY SOKMIL`クレジットを表示します。
 
-### 運用・品質
+## セキュリティ
 
-- cronによる定期取得
-- APIデータの重複排除と更新
-- 多重実行防止
-- キャッシュとインデックスによる軽量化
-- CSRF・XSS・セッションなどの基本的なセキュリティ対策
-- エラーログ・API実行ログ
-- 初回セットアップとデータベース自動構築
-
-## 使用予定技術
-
-- PHP
-- MySQL / MariaDB
-- JavaScript
-- HTML / CSS
-- PDO
-- フレームワークなし
-
-## 重要な前提
-
-- PinkClub FANZAの既存機能を参考にする
-- SOKUMIRU固有のAPI仕様と利用規約を優先する
-- APIキーやパスワードなどの秘密情報をGitへ保存しない
-- 外部画像・動画の保存や利用方法はSOKUMIRUの提供条件に従う
-- PC・スマートフォンの両方で使いやすくする
-- 軽量で一般的なレンタルサーバーに設置しやすい構成にする
-- 実装は小さな作業単位に分け、作業ブランチとDraft PRで進める
-- ユーザー確認前にmainへマージしない
-
-## 開発の流れ
-
-1. SOKUMIRU APIの仕様・利用条件を調査
-2. PinkClub FANZAから引き継ぐ機能を整理
-3. SOKUMIRUの商品項目とデータベース項目を対応付け
-4. 初期セットアップと共通基盤を作成
-5. API取得・保存・自動更新を実装
-6. 公開画面と管理画面をSOKUMIRU向けに実装
-7. SEO・アクセス解析・周辺機能を実装
-8. セキュリティ・速度・総合動作を確認
-
-## 開発管理
-
-作業内容と進行状況は、このリポジトリのIssuesで管理します。
-
-## 関連プロジェクト
-
-- [PinkClub FANZA](https://github.com/TaniyanR/PinkClub-FANZA)
-- [PinkClub DUGA](https://github.com/TaniyanR/PinkClub-DUGA)
+- API KEYとアフィリエイトIDはAPIログでマスクします。
+- APIリクエストはHTTPS、タイムアウト、HTTPステータス、JSONステータスを検証します。
+- 商品リンクの中継先は`*.sokmil.com`だけを許可します。
+- 管理画面POSTはCSRF検証を行います。
