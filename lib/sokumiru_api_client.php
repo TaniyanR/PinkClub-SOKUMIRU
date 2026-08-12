@@ -50,7 +50,6 @@ final class SokumiruApiClient
 
         $cached = $this->fetchCachedResponse($requestHash);
         if ($cached !== null) {
-            $this->insertApiLog($operation, $safeUrl, $requestHash, 200, json_encode($cached, JSON_UNESCAPED_UNICODE | JSON_UNESCAPED_SLASHES) ?: '{}', true);
             return $cached;
         }
 
@@ -145,7 +144,7 @@ final class SokumiruApiClient
                 ':url' => $requestUrl,
                 ':hash' => $requestHash,
                 ':status' => $status,
-                ':body' => mb_substr($responseBody, 0, 65535),
+                ':body' => mb_substr($responseBody, 0, ($status >= 200 && $status < 400) ? 65535 : 4096),
                 ':cache' => $cacheHit ? 1 : 0,
             ]);
         } catch (Throwable $e) {
