@@ -90,6 +90,37 @@ function take_unique_items_for_home(array $items, array &$usedKeys, int $limit):
     return $result;
 }
 
+function take_unique_actresses_for_home(array $actresses, int $limit = 15): array
+{
+    $result = [];
+    $seenNames = [];
+
+    foreach ($actresses as $actress) {
+        if (!is_array($actress)) {
+            continue;
+        }
+
+        $name = trim((string)($actress['name'] ?? ''));
+        if ($name === '') {
+            continue;
+        }
+
+        $normalizedName = preg_replace('/\s+/u', '', $name);
+        $normalizedName = mb_strtolower(is_string($normalizedName) ? $normalizedName : $name, 'UTF-8');
+        if (isset($seenNames[$normalizedName])) {
+            continue;
+        }
+
+        $seenNames[$normalizedName] = true;
+        $result[] = $actress;
+        if (count($result) >= $limit) {
+            break;
+        }
+    }
+
+    return $result;
+}
+
 function decode_item_raw(array $item): array
 {
     $raw = [];
@@ -297,6 +328,18 @@ function item_sample_state(array $item): array
     $hasImageSample = false;
     $sampleImageUrl = $raw['sampleImageURL'] ?? null;
     if (is_array($sampleImageUrl)) {
+        $directImages = $sampleImageUrl['image'] ?? null;
+        if (is_string($directImages) && trim($directImages) !== '') {
+            $hasImageSample = true;
+        } elseif (is_array($directImages)) {
+            foreach ($directImages as $image) {
+                if (is_string($image) && trim($image) !== '') {
+                    $hasImageSample = true;
+                    break;
+                }
+            }
+        }
+
         foreach (['sample_l', 'sample_s'] as $sampleKey) {
             $images = $sampleImageUrl[$sampleKey]['image'] ?? null;
             if (is_array($images)) {
@@ -306,15 +349,6 @@ function item_sample_state(array $item): array
                         break 2;
                     }
                 }
-            }
-        }
-    }
-
-    if (!$hasImageSample) {
-        foreach (parse_index_image_urls((string)($item['image_list'] ?? '')) as $image) {
-            if (trim((string)$image) !== '') {
-                $hasImageSample = true;
-                break;
             }
         }
     }
@@ -464,9 +498,10 @@ try {
 
         if (db_table_exists($pdo, 'actresses')) {
             $actresses = pcf_home_rotation_current_set($homeRotationCache, 'actresses');
-            if ($actresses === []) {
-                $actressCandidates = $pdo->query('SELECT id,name,image_small,image_large,image_url FROM actresses ORDER BY updated_at DESC,id DESC LIMIT 30')->fetchAll();
-                $actresses = array_slice($actressCandidates ?: [], 0, 15);
+            $actresses = take_unique_actresses_for_home($actresses);
+            if (count($actresses) < 15) {
+                $actressCandidates = $pdo->query('SELECT id,name,image_small,image_large,image_url FROM actresses ORDER BY updated_at DESC,id DESC LIMIT 60')->fetchAll();
+                $actresses = take_unique_actresses_for_home(array_merge($actresses, $actressCandidates ?: []));
             }
         }
 

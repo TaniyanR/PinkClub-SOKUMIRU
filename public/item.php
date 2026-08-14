@@ -667,8 +667,7 @@ require __DIR__ . '/partials/header.php';
 <article>
   <h1 class="pcf-hero__title pcf-item-title"><?= e($breadcrumbTitle) ?></h1>
 
-  <?php if ($sampleMovieUrl !== '' || $sampleImagesSmallLargeMap !== []): ?>
-    <div class="pcf-item-samples" style="display:flex; gap:8px; align-items:flex-start; flex-wrap:nowrap;">
+  <div class="pcf-item-samples" style="display:flex; gap:8px; align-items:flex-start; flex-wrap:nowrap;">
       <?php if ($sampleMovieUrl !== ''): ?>
       <div class="sample-movie-modal__frame-wrap pcf-item-sample-movie" style="width: min(720px, calc(100% - 400px)); max-width: 100%; aspect-ratio: 720 / 480;">
         <iframe class="sample-movie-modal__frame" src="<?= e($sampleMovieUrl) ?>" allow="autoplay; fullscreen" referrerpolicy="no-referrer" scrolling="no" width="720" height="480"></iframe>
@@ -685,8 +684,7 @@ require __DIR__ . '/partials/header.php';
         <?php endforeach; ?>
       </div></div>
       <?php endif; ?>
-    </div>
-  <?php endif; ?>
+  </div>
 
   <?php if ($affiliateUrl !== ''): ?>
     <p><a class="pcf-btn" style="display:block; text-align:center; border:2px solid #9aa0ab; font-weight:700; font-size:18px; padding:12px 14px;" href="<?= e($affiliateOutUrl) ?>" target="_blank" rel="noopener noreferrer sponsored nofollow">購入ボタン</a></p>
