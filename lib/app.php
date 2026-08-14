@@ -102,7 +102,13 @@ function sokumiru_client_for_type(string $apiType): SokumiruApiClient
 {
     $cred = api_credential_get($apiType);
     $endpoint = app_config()['sokumiru']['endpoint'];
-    return new SokumiruApiClient((string)($cred['api_id'] ?? ''), (string)($cred['affiliate_id'] ?? ''), $endpoint);
+    $referer = trim((string)(getenv('SOKUMIRU_REFERER') ?: site_setting_get('site.url', defined('BASE_URL') ? BASE_URL : '')));
+    return new SokumiruApiClient(
+        (string)($cred['api_id'] ?? ''),
+        (string)($cred['affiliate_id'] ?? ''),
+        $endpoint,
+        $referer
+    );
 }
 
 function sokumiru_client_from_settings(): SokumiruApiClient
