@@ -13,8 +13,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
     csrf_validate_or_fail(post('_csrf'));
     $action = (string) post('action');
     $apiId = trim((string) post('api_id', ''));
-    $affiliateId = trim((string) post('affiliate_id', ''));
-    settings_save($apiId, $affiliateId);
+    settings_save($apiId);
 
     try {
         $client = sokumiru_client_from_settings();
@@ -39,9 +38,6 @@ require __DIR__ . '/includes/header.php';
     <?= csrf_input() ?>
     <label>API KEY
       <input type="password" name="api_id" value="<?= e($settings['api_id'] ?? '') ?>" autocomplete="off">
-    </label>
-    <label>Affiliate ID
-      <input name="affiliate_id" value="<?= e($settings['affiliate_id'] ?? '') ?>">
     </label>
     <div class="admin-actions">
       <button name="action" value="save" type="submit">保存</button>

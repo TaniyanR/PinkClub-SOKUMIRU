@@ -18,10 +18,12 @@ SOKUMIRUアフィリエイトの商品を紹介する、PHP + MySQL/MariaDB製�
 1. PHP 8.1以降、MySQL 8.0またはMariaDB、cURL・PDO MySQL・mbstringを用意します。
 2. `config.local.php`にDB接続情報を設定します。
 3. `php scripts/init_db.php`を実行するか、初回画面からDBを初期化します。
-4. 管理画面の「商品情報API設定」でSOKUMIRUのAPI KEYとアフィリエイトIDを保存します。
+4. 管理画面の「商品情報API設定」でSOKUMIRUのAPI KEYを保存します。
 5. テスト取得後、自動設定を有効にします。
 
-API認証情報はリポジトリへ保存しないでください。環境変数を利用する場合は、`SOKUMIRU_API_KEY`と`SOKUMIRU_AFFILIATE_ID`を指定できます。
+API認証情報はリポジトリへ保存しないでください。環境変数を利用する場合は、`SOKUMIRU_API_KEY`を指定できます。
+
+APIリクエストには管理画面「サイト設定」のURLをRefererとして送信します。cronでURLを自動判定できない環境では、登録済みサイトURLを`SOKUMIRU_REFERER`環境変数へ設定してください。リクエストはプロセス間で1秒以上の間隔を空け、HTTPSかつ`sokmil-ad.com`配下への転送だけを許可します。
 
 ## APIデータの対応
 
@@ -48,7 +50,7 @@ API認証情報はリポジトリへ保存しないでください。環境変�
 
 ## セキュリティ
 
-- API KEYとアフィリエイトIDはAPIログでマスクします。
+- API KEYはAPIログでマスクします。
 - APIリクエストはHTTPS、タイムアウト、HTTPステータス、JSONステータスを検証します。
 - 商品リンクの中継先は`*.sokmil.com`だけを許可します。
 - 管理画面POSTはCSRF検証を行います。

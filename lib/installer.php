@@ -226,15 +226,12 @@ function installer_normalize_settings_table(PDO $pdo, string $stepLabel): void
         $pdo->exec($sql);
     }
 
-    if (in_array('affiliate_id', $columns, true)) {
-        $orderBy = in_array('id', $columns, true) ? ' ORDER BY id ASC ' : '';
-        $sql = 'INSERT INTO `' . $tmpTable . '`(setting_key, setting_value, created_at, updated_at) SELECT "fanza_affiliate_id", COALESCE(CAST(affiliate_id AS CHAR), ""), NOW(), NOW() FROM settings' . $orderBy . 'LIMIT 1 ON DUPLICATE KEY UPDATE setting_value=VALUES(setting_value), updated_at=NOW()';
-        $pdo->exec($sql);
-    }
-
     $backup = 'settings_legacy_backup';
     $pdo->exec('DROP TABLE IF EXISTS `' . $backup . '`');
     $pdo->exec('RENAME TABLE settings TO `' . $backup . '`, `' . $tmpTable . '` TO settings');
+    if (in_array('affiliate_id', $columns, true)) {
+        $pdo->exec('ALTER TABLE `' . $backup . '` DROP COLUMN affiliate_id');
+    }
     installer_log('step=' . $stepLabel . ' settings_table_normalized=true');
 }
 
