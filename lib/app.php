@@ -34,15 +34,11 @@ function settings_get(): array
     $defaults = app_config()['sokumiru'] ?? [];
 
     $envApiId = trim((string)(getenv('SOKUMIRU_API_KEY') ?: ''));
-    $envAffiliateId = trim((string)(getenv('SOKUMIRU_AFFILIATE_ID') ?: ''));
-
     $itemCred = api_credential_get('items');
     $dbApiId = trim((string)($itemCred['api_id'] ?? ''));
-    $dbAffiliateId = trim((string)($itemCred['affiliate_id'] ?? ''));
 
     return [
         'api_id' => $dbApiId !== '' ? $dbApiId : ($envApiId !== '' ? $envApiId : ''),
-        'affiliate_id' => $dbAffiliateId !== '' ? $dbAffiliateId : ($envAffiliateId !== '' ? $envAffiliateId : ''),
         'site' => 'SOKUMIRU',
         'service' => 'sokumiru',
         'floor' => 'av',
@@ -79,7 +75,7 @@ function settings_bool(string $key, bool $default): bool
     return settings_int($key, $default ? 1 : 0) === 1;
 }
 
-function settings_save(string $apiId, string $affiliateId, int $itemSyncBatch = 100, ?int $masterFloorId = null): void
+function settings_save(string $apiId, int $itemSyncBatch = 100, ?int $masterFloorId = null): void
 {
     $allowed = [1, 10, 20, 30, 50, 100, 200, 300, 500];
     if (!in_array($itemSyncBatch, $allowed, true)) {
@@ -88,7 +84,6 @@ function settings_save(string $apiId, string $affiliateId, int $itemSyncBatch = 
 
     $payload = [
         'sokumiru_api_key' => trim($apiId),
-        'sokumiru_affiliate_id' => trim($affiliateId),
         'item_sync_batch' => (string)$itemSyncBatch,
     ];
     if ($masterFloorId !== null) {
@@ -105,7 +100,6 @@ function sokumiru_client_for_type(string $apiType): SokumiruApiClient
     $referer = trim((string)(getenv('SOKUMIRU_REFERER') ?: site_setting_get('site.url', defined('BASE_URL') ? BASE_URL : '')));
     return new SokumiruApiClient(
         (string)($cred['api_id'] ?? ''),
-        (string)($cred['affiliate_id'] ?? ''),
         $endpoint,
         $referer
     );

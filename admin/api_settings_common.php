@@ -21,7 +21,6 @@ $message = '';
 $messageType = 'success';
 $cred = api_credential_get($apiType);
 $apiId = (string)($cred['api_id'] ?? '');
-$affiliateId = (string)($cred['affiliate_id'] ?? '');
 $testResult = null;
 $savedRows = [];
 $currentPage = 1;
@@ -39,8 +38,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
 
     if ($action === 'save') {
         $apiId = trim((string)post('api_id', ''));
-        $affiliateId = trim((string)post('affiliate_id', ''));
-        api_credential_set($apiType, $apiId, $affiliateId);
+        api_credential_set($apiType, $apiId);
         $message = '設定を保存しました。';
         $messageType = 'success';
     }
@@ -48,8 +46,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
     if ($action === 'test_save') {
         try {
             $apiId = trim((string)post('api_id', $apiId));
-            $affiliateId = trim((string)post('affiliate_id', $affiliateId));
-            api_credential_set($apiType, $apiId, $affiliateId);
+            api_credential_set($apiType, $apiId);
             $sync = sokumiru_sync_service($apiType);
 
             $s = settings_get();
@@ -155,7 +152,7 @@ require __DIR__ . '/includes/header.php';
 ?>
 <section class="card">
   <h1><?= e($pageTitle) ?></h1>
-  <p>このページで保存したAPI KEYとアフィリエイトIDは、SOKUMIRUの商品・女優同期で共通利用されます。取得カテゴリはアダルト動画（av）固定です。</p>
+  <p>このページで保存したAPI KEYは、SOKUMIRUの商品・女優同期で共通利用されます。取得カテゴリはアダルト動画（av）固定です。</p>
 
   <?php if ($message !== ''): ?>
     <div class="admin-notice <?= $messageType === 'success' ? 'admin-notice--success' : 'admin-notice--error' ?>">
@@ -167,9 +164,6 @@ require __DIR__ . '/includes/header.php';
     <?= csrf_input() ?>
     <div>
       <label>API KEY<br><input type="password" name="api_id" value="<?= e($apiId) ?>" autocomplete="off" style="width:100%"></label>
-    </div>
-    <div>
-      <label>アフィリエイトID<br><input type="text" name="affiliate_id" value="<?= e($affiliateId) ?>" style="width:100%"></label>
     </div>
     <div style="display:flex;gap:8px;flex-wrap:wrap;">
       <button type="submit" name="action" value="save">保存</button>

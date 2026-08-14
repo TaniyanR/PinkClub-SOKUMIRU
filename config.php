@@ -50,7 +50,6 @@ return [
     // SOKUMIRU API（認証情報は管理画面または環境変数で設定）
     'sokumiru_api' => [
         'api_key' => '',
-        'affiliate_id' => '',
         'category' => 'av',
     ],
 

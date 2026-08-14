@@ -6,7 +6,6 @@ final class SokumiruApiClient
 {
     public function __construct(
         private readonly string $apiKey,
-        private readonly string $affiliateId,
         private readonly string $endpoint,
         private readonly string $referer = ''
     ) {
@@ -30,13 +29,12 @@ final class SokumiruApiClient
 
     private function request(string $operation, array $params): array
     {
-        if (trim($this->apiKey) === '' || trim($this->affiliateId) === '') {
-            throw new RuntimeException('API KEY / アフィリエイトIDを設定してください。');
+        if (trim($this->apiKey) === '') {
+            throw new RuntimeException('API KEYを設定してください。');
         }
 
         $query = array_filter(array_merge($params, [
             'api_key' => $this->apiKey,
-            'affiliate_id' => $this->affiliateId,
             'output' => 'json',
         ]), static fn(mixed $value): bool => $value !== null && $value !== '');
         $query['hits'] = min(100, max(1, (int)($query['hits'] ?? 20)));
@@ -45,7 +43,6 @@ final class SokumiruApiClient
         $url = rtrim($this->endpoint, '/') . '/' . $operation . '?' . http_build_query($query, '', '&', PHP_QUERY_RFC3986);
         $safeQuery = $query;
         $safeQuery['api_key'] = '***';
-        $safeQuery['affiliate_id'] = '***';
         $safeUrl = rtrim($this->endpoint, '/') . '/' . $operation . '?' . http_build_query($safeQuery, '', '&', PHP_QUERY_RFC3986);
         $requestHash = hash('sha256', $url);
 
@@ -238,7 +235,7 @@ final class SokumiruApiClient
             return str_replace($this->apiKey, '***', $response);
         }
         if (isset($decoded['request']['parameters']) && is_array($decoded['request']['parameters'])) {
-            foreach (['api_key', 'affiliate_id'] as $key) {
+            foreach (['api_key'] as $key) {
                 if (array_key_exists($key, $decoded['request']['parameters'])) {
                     $decoded['request']['parameters'][$key] = '***';
                 }

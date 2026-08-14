@@ -69,7 +69,7 @@ function scheduler_tick(): array
 function scheduler_schedule_result_status(array $result): string
 {
     $message = (string)($result['message'] ?? '');
-    if ($message === 'ロック取得失敗のためスキップ' || $message === 'API KEY / アフィリエイトID 未設定のためスキップ') {
+    if ($message === 'ロック取得失敗のためスキップ' || $message === 'API KEY未設定のためスキップ') {
         return 'skipped';
     }
     return 'success';
@@ -221,11 +221,11 @@ function scheduler_run_master_schedule(string $jobKey, SokumiruSyncService $serv
 function scheduler_skip_missing_credentials(PDO $pdo, string $jobKey): ?array
 {
     $cred = api_credential_get('items');
-    if (trim((string)($cred['api_id'] ?? '')) !== '' && trim((string)($cred['affiliate_id'] ?? '')) !== '') {
+    if (trim((string)($cred['api_id'] ?? '')) !== '') {
         return null;
     }
 
-    $message = 'API KEY / アフィリエイトID 未設定のためスキップ';
+    $message = 'API KEY未設定のためスキップ';
     $pdo->prepare('UPDATE sync_job_state SET last_run_at = NOW(), last_success = 0, last_message = :message, lock_until = NULL, updated_at = NOW() WHERE job_key = :job_key')
         ->execute([':message' => $message, ':job_key' => $jobKey]);
 

@@ -30,13 +30,12 @@ function api_credential_get(string $apiType): array
     }
 
     try {
-        $stmt = db()->prepare('SELECT api_id, affiliate_id FROM api_credentials WHERE api_type = :api_type LIMIT 1');
+        $stmt = db()->prepare('SELECT api_id FROM api_credentials WHERE api_type = :api_type LIMIT 1');
         $stmt->execute([':api_type' => $apiType]);
         $row = $stmt->fetch(PDO::FETCH_ASSOC);
         if (is_array($row)) {
             return [
                 'api_id' => trim((string)($row['api_id'] ?? '')),
-                'affiliate_id' => trim((string)($row['affiliate_id'] ?? '')),
             ];
         }
     } catch (Throwable) {
@@ -44,27 +43,24 @@ function api_credential_get(string $apiType): array
     }
 
     $fallbackApiId = trim(site_setting_get('sokumiru_api_key', ''));
-    $fallbackAffiliateId = trim(site_setting_get('sokumiru_affiliate_id', ''));
-    return ['api_id' => $fallbackApiId, 'affiliate_id' => $fallbackAffiliateId];
+    return ['api_id' => $fallbackApiId];
 }
 
-function api_credential_set(string $apiType, string $apiId, string $affiliateId): void
+function api_credential_set(string $apiType, string $apiId): void
 {
     $apiType = api_credential_normalize_type($apiType);
     if ($apiType !== 'items') {
         $apiType = 'items';
     }
 
-    db()->prepare('INSERT INTO api_credentials (api_type, api_id, affiliate_id, created_at, updated_at) VALUES (:api_type, :api_id, :affiliate_id, NOW(), NOW()) ON DUPLICATE KEY UPDATE api_id = VALUES(api_id), affiliate_id = VALUES(affiliate_id), updated_at = NOW()')
+    db()->prepare('INSERT INTO api_credentials (api_type, api_id, created_at, updated_at) VALUES (:api_type, :api_id, NOW(), NOW()) ON DUPLICATE KEY UPDATE api_id = VALUES(api_id), updated_at = NOW()')
         ->execute([
             ':api_type' => $apiType,
             ':api_id' => trim($apiId),
-            ':affiliate_id' => trim($affiliateId),
         ]);
     db()->prepare("DELETE FROM api_credentials WHERE api_type IN ('genres','series')")->execute();
 
     site_setting_set_many([
         'sokumiru_api_key' => trim($apiId),
-        'sokumiru_affiliate_id' => trim($affiliateId),
     ]);
 }
