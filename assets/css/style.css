@@ -511,6 +511,13 @@ body.admin-page .admin-menu__child .admin-menu__link{padding-left:28px;font-weig
 .rail-row--no-scroll{overflow-x:visible;flex-wrap:wrap}
 .rail-row--bottom-scroll{overflow-x:auto;overflow-y:hidden;flex-wrap:nowrap}
 .rail-row--top-shift .rail-card .thumb{position:relative;top:-5px}
+@media (min-width:901px){
+  .home-feature-section .rail-row--210.rail-row--top-shift .rail-card .rail-card__noimage{
+    position:relative;
+    top:-5px;
+    height:294px !important;
+  }
+}
 .rail-row--between-gap{margin-bottom:24px}
 .rail-row--300 .rail-card{flex:0 0 300px !important;min-width:300px !important;max-width:300px !important}
 .rail-row--200 .rail-card{flex:0 0 200px !important;min-width:200px !important;max-width:200px !important}
