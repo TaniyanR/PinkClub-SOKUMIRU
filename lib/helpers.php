@@ -181,6 +181,47 @@ function dedupe_items_by_key(array $items): array
 
     return $result;
 }
+
+function sokumiru_item_is_campaign_landing(array $item): bool
+{
+    $urls = [
+        $item['url'] ?? null,
+        $item['affiliate_url'] ?? null,
+    ];
+
+    $raw = $item['raw'] ?? null;
+    if (!is_array($raw) && is_string($item['raw_json'] ?? null)) {
+        $decoded = json_decode((string)$item['raw_json'], true);
+        $raw = is_array($decoded) ? $decoded : [];
+    }
+    if (is_array($raw)) {
+        $urls[] = $raw['URL'] ?? null;
+        $urls[] = $raw['affiliateURL'] ?? null;
+    }
+
+    foreach ($urls as $url) {
+        if (!is_string($url) || trim($url) === '') {
+            continue;
+        }
+        $path = parse_url(html_entity_decode(trim($url), ENT_QUOTES | ENT_HTML5, 'UTF-8'), PHP_URL_PATH);
+        if (is_string($path) && preg_match('#/limited_item(?:/|$)#i', $path) === 1) {
+            return true;
+        }
+    }
+
+    return false;
+}
+
+function sokumiru_regular_product_where(string $alias = 'items'): string
+{
+    if (preg_match('/^[A-Za-z_][A-Za-z0-9_]*$/', $alias) !== 1) {
+        throw new InvalidArgumentException('Invalid SQL alias');
+    }
+
+    return 'LOWER(COALESCE(' . $alias . '.url, "")) NOT LIKE "%/limited_item/%"'
+        . ' AND LOWER(COALESCE(' . $alias . '.affiliate_url, "")) NOT LIKE "%/limited_item/%"';
+}
+
 function build_url(string $path, array $params = []): string
 {
     $filtered = array_filter(

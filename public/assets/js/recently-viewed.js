@@ -127,6 +127,45 @@
     }
   };
 
+  let validationPromise = null;
+  const pruneUnavailableHistory = () => {
+    if (validationPromise) return validationPromise;
+
+    const history = readHistory();
+    if (history.length === 0) return Promise.resolve([]);
+
+    validationPromise = (async () => {
+      try {
+        const validationUrl = new URL(itemUrlForId(history[0].id, history[0].url));
+        validationUrl.pathname = validationUrl.pathname.replace(/item\.php$/i, 'recent_items_validate.php');
+        validationUrl.search = '';
+        validationUrl.hash = '';
+        validationUrl.searchParams.set('ids', history.map((entry) => entry.id).join(','));
+
+        const response = await fetch(validationUrl.href, {
+          credentials: 'same-origin',
+          headers: { Accept: 'application/json' },
+          cache: 'no-store'
+        });
+        if (!response.ok) return history;
+
+        const payload = await response.json();
+        if (!payload || !Array.isArray(payload.valid_ids)) return history;
+
+        const validIds = new Set(payload.valid_ids.map((id) => Number.parseInt(String(id), 10)));
+        const filtered = history.filter((entry) => validIds.has(entry.id));
+        if (filtered.length !== history.length) writeHistory(filtered);
+        return filtered;
+      } catch (_) {
+        return history;
+      } finally {
+        validationPromise = null;
+      }
+    })();
+
+    return validationPromise;
+  };
+
   const historyIsHidden = () => localStorage.getItem(VISIBILITY_KEY) === '1';
   const setHistoryHidden = (hidden) => {
     try {
@@ -156,6 +195,12 @@
 
     const id = Number.parseInt(new URLSearchParams(window.location.search).get('id') || '', 10);
     if (!Number.isInteger(id) || id <= 0) return;
+
+    const pageStatus = document.querySelector('.pcf-hero__eyebrow');
+    if (pageStatus && pageStatus.textContent.trim() === '404 Not Found') {
+      writeHistory(readHistory().filter((entry) => entry.id !== id));
+      return;
+    }
 
     const titleMeta = document.querySelector('meta[property="og:title"]');
     const heading = document.querySelector('h1');
@@ -197,7 +242,7 @@
     return node;
   };
 
-  const renderHistory = () => {
+  const renderHistory = async () => {
     const section = document.getElementById('pcf-recently-viewed');
     const list = document.getElementById('pcf-recent-list');
     const clearButton = document.getElementById('pcf-recent-clear');
@@ -221,7 +266,7 @@
       renderHistory();
     };
 
-    const history = readHistory().slice(0, MAX_RENDERED);
+    const history = (await pruneUnavailableHistory()).slice(0, MAX_RENDERED);
     list.replaceChildren();
 
     if (history.length === 0) {

@@ -2,6 +2,7 @@
 declare(strict_types=1);
 
 require_once __DIR__ . '/db.php';
+require_once __DIR__ . '/helpers.php';
 
 /**
  * ここでSQLに埋め込む文字列は必ず許可リストで制限する。
@@ -206,6 +207,7 @@ function items_product_source_where(string $alias = ''): string
     }
 
     $where[] = items_front_release_where($outerPrefix);
+    $where[] = sokumiru_regular_product_where($outerPrefix);
 
     if (items_table_exists('rss_items') && items_table_exists('rss_sources') && items_column_exists('source_type', 'rss_sources')) {
         $where[] = 'NOT EXISTS (SELECT 1 FROM rss_items ri INNER JOIN rss_sources rs ON rs.id = ri.source_id WHERE rs.source_type = "partner_link" AND (ri.title = ' . $outerPrefix . '.title OR ri.url = ' . $outerPrefix . '.url OR ri.url = ' . $outerPrefix . '.affiliate_url))';

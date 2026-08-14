@@ -68,6 +68,9 @@ function take_unique_items_for_home(array $items, array &$usedKeys, int $limit):
         if (!is_array($item)) {
             continue;
         }
+        if (sokumiru_item_is_campaign_landing($item)) {
+            continue;
+        }
 
         $contentId = strtolower(trim((string)($item['content_id'] ?? '')));
         $productId = strtolower(trim((string)($item['product_id'] ?? '')));

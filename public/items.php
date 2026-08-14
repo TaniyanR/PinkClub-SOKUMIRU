@@ -13,6 +13,9 @@ function take_unique_items_for_home(array $items, array &$usedKeys, int $limit):
         if (!is_array($item)) {
             continue;
         }
+        if (sokumiru_item_is_campaign_landing($item)) {
+            continue;
+        }
 
         $contentId = strtolower(trim((string)($item['content_id'] ?? '')));
         $productId = strtolower(trim((string)($item['product_id'] ?? '')));
@@ -242,6 +245,7 @@ function index_items_product_source_where(PDO $pdo): string
         $parts[] = 'items.item_source = "sokumiru_product"';
     }
     $parts[] = index_items_front_release_where();
+    $parts[] = sokumiru_regular_product_where('items');
     if (index_table_exists($pdo, 'rss_items') && index_table_exists($pdo, 'rss_sources') && index_column_exists($pdo, 'rss_sources', 'source_type')) {
         $parts[] = 'NOT EXISTS (SELECT 1 FROM rss_items ri INNER JOIN rss_sources rs ON rs.id = ri.source_id WHERE rs.source_type = "partner_link" AND (ri.title = items.title OR ri.url = items.url OR ri.url = items.affiliate_url))';
     }

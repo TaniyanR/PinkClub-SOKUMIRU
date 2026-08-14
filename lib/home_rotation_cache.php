@@ -2,6 +2,7 @@
 declare(strict_types=1);
 
 require_once __DIR__ . '/db.php';
+require_once __DIR__ . '/helpers.php';
 
 function pcf_home_rotation_cache_file(): string
 {
@@ -103,7 +104,8 @@ function pcf_home_rotation_refresh(?PDO $pdo = null): array
          sample_movie_url_720,sample_movie_url_644,sample_movie_url_560,sample_movie_url_476,
          release_date,created_at,updated_at',
         'items',
-        'item_source="sokumiru_product" AND (release_date IS NULL OR release_date="" OR release_date<=CURDATE())',
+        'item_source="sokumiru_product" AND (release_date IS NULL OR release_date="" OR release_date<=CURDATE())'
+            . ' AND ' . sokumiru_regular_product_where('items'),
         40
     );
     $genres = pcf_home_rotation_query(
