@@ -359,7 +359,7 @@ if (!function_exists('pcf_collect_sample_image_urls_from_value')) {
             foreach (pcf_parse_image_urls($value) as $candidate) {
                 $url = trim((string)$candidate);
                 if ($url !== '' && !pcf_is_self_hosted_fanza_image_url($url)) {
-                    $images[] = sokumiru_large_sample_image_url($url);
+                    $images[] = $url;
                 }
             }
             return;
