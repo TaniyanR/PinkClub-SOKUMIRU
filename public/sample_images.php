@@ -105,12 +105,6 @@ if (is_array($decoded) && isset($decoded['sampleImageURL'])) {
     }
 }
 $images = array_values(array_unique($images));
-$imagePairs = array_map(static function (string $image): array {
-    return [
-        'small' => $image,
-        'large' => sokumiru_large_sample_image_url($image),
-    ];
-}, $images);
 ?>
 <!doctype html>
 <html lang="ja">
@@ -128,7 +122,7 @@ $imagePairs = array_map(static function (string $image): array {
     .sample-scroll::-webkit-scrollbar { height: 10px; }
     .sample-scroll::-webkit-scrollbar-thumb { background: #b9bdc5; border-radius: 8px; }
     .sample-frame { width: min(840px, calc(100vw - 54px)); height: 100%; flex: 0 0 min(840px, calc(100vw - 54px)); max-width: none; background: #fff; border: 1px solid #dcdcde; margin: 0; display: flex; align-items: center; justify-content: center; box-sizing: border-box; }
-    .sample-frame img { width: 100%; height: 100%; max-width: 100%; max-height: 100%; object-fit: contain; display: block; }
+    .sample-frame img { width: auto; height: auto; max-width: 100%; max-height: 100%; object-fit: contain; display: block; }
     .sample-arrow { position: absolute; top: 50%; z-index: 2; width: 48px; height: 48px; margin-top: -24px; border: 0; border-radius: 50%; background: rgba(255, 255, 255, 0.92); color: #222; box-shadow: 0 2px 10px rgba(0, 0, 0, 0.28); font-size: 30px; line-height: 1; cursor: pointer; display: flex; align-items: center; justify-content: center; transition: opacity .2s ease, transform .2s ease; }
     .sample-prev { left: 14px; }
     .sample-next { right: 14px; }
@@ -146,12 +140,12 @@ $imagePairs = array_map(static function (string $image): array {
   <h1><?= e((string)$item['title']) ?> のサンプル画像</h1>
   <div class="sample-viewer">
     <div class="sample-scroll" id="sampleScroll">
-    <?php if ($imagePairs === []): ?>
+    <?php if ($images === []): ?>
       <p class="message">画像がありません</p>
     <?php else: ?>
-      <?php foreach ($imagePairs as $index => $imagePair): ?>
+      <?php foreach ($images as $index => $image): ?>
         <div class="sample-frame">
-          <img src="<?= e((string)$imagePair['large']) ?>" data-fallback-src="<?= e((string)$imagePair['small']) ?>" alt="サンプル画像 <?= e((string)($index + 1)) ?>">
+          <img src="<?= e($image) ?>" alt="サンプル画像 <?= e((string)($index + 1)) ?>">
         </div>
       <?php endforeach; ?>
     <?php endif; ?>
@@ -161,17 +155,9 @@ $imagePairs = array_map(static function (string $image): array {
       <button type="button" class="sample-arrow sample-next" id="sampleNext" aria-label="次のサンプル画像へ">›</button>
     <?php endif; ?>
   </div>
+  <?php if (count($images) > 1): ?>
   <script>
   (function () {
-    document.querySelectorAll('img[data-fallback-src]').forEach(function (image) {
-      image.addEventListener('error', function () {
-        var fallback = image.getAttribute('data-fallback-src') || '';
-        if (fallback !== '' && image.src !== fallback) {
-          image.src = fallback;
-        }
-      }, { once: true });
-    });
-
     var scroller = document.getElementById('sampleScroll');
     var prevButton = document.getElementById('samplePrev');
     var nextButton = document.getElementById('sampleNext');
@@ -204,5 +190,6 @@ $imagePairs = array_map(static function (string $image): array {
     updateButtons();
   }());
   </script>
+  <?php endif; ?>
 </body>
 </html>
