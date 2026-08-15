@@ -394,35 +394,22 @@ if ($sampleMovieUrl === '') {
 
 $sampleImages = [];
 $sampleImagesSmall = [];
-$sampleImagesDirect = [];
 $sampleImageUrl = $raw['sampleImageURL'] ?? null;
 if (is_array($sampleImageUrl)) {
+    item_collect_sample_image_urls($sampleImageUrl['image'] ?? null, $sampleImages);
     item_collect_sample_image_urls($sampleImageUrl['sample_l']['image'] ?? null, $sampleImages);
     item_collect_sample_image_urls($sampleImageUrl['sample_s']['image'] ?? null, $sampleImagesSmall);
-    item_collect_sample_image_urls($sampleImageUrl['image'] ?? null, $sampleImagesDirect);
-    if ($sampleImages === []) {
-        $sampleImages = $sampleImagesDirect;
-    }
-    if ($sampleImagesSmall === []) {
-        $sampleImagesSmall = $sampleImagesDirect;
-    }
 } elseif (is_string($sampleImageUrl)) {
     item_collect_sample_image_urls($sampleImageUrl, $sampleImages);
-    $sampleImagesSmall = $sampleImages;
 }
 $sampleImages = array_values(array_unique($sampleImages));
 $sampleImagesSmall = array_values(array_unique($sampleImagesSmall));
 $sampleImages = array_values(array_filter(array_slice($sampleImages, 0, 24), static fn($url) => !pcf_is_self_hosted_fanza_image_url((string)$url)));
 $sampleImagesSmall = array_values(array_filter(array_slice($sampleImagesSmall, 0, 24), static fn($url) => !pcf_is_self_hosted_fanza_image_url((string)$url)));
-$sampleImagesOriginal = $sampleImages;
-$sampleImages = array_values(array_unique(array_map(
-    static fn($url): string => sokumiru_large_sample_image_url((string)$url),
-    $sampleImages
-)));
 $sampleImagesSmallLargeMap = [];
 $sampleImageCount = max(count($sampleImages), count($sampleImagesSmall));
 for ($i = 0; $i < $sampleImageCount; $i++) {
-    $smallImage = trim((string)($sampleImagesSmall[$i] ?? $sampleImagesOriginal[$i] ?? $sampleImages[$i] ?? ''));
+    $smallImage = trim((string)($sampleImagesSmall[$i] ?? $sampleImages[$i] ?? ''));
     $largeImage = trim((string)($sampleImages[$i] ?? $smallImage));
     if ($smallImage === '' || $largeImage === '') {
         continue;
@@ -838,18 +825,9 @@ require __DIR__ . '/partials/header.php';
   const imageViewerMain = document.getElementById('pcf-image-viewer-main');
   const imageViewerThumbs = document.getElementById('pcf-image-viewer-thumbs');
   const imageList = <?= json_encode(array_map(static fn($pair) => ['small' => (string)($pair['small'] ?? ''), 'large' => (string)($pair['large'] ?? '')], $sampleImagesSmallLargeMap), JSON_UNESCAPED_UNICODE | JSON_UNESCAPED_SLASHES) ?>;
-  if (imageViewerMain) {
-    imageViewerMain.addEventListener('error', () => {
-      const fallback = imageViewerMain.dataset.fallbackSrc || '';
-      if (fallback !== '' && imageViewerMain.src !== fallback) {
-        imageViewerMain.src = fallback;
-      }
-    });
-  }
   const showImage = (index) => {
     if (!imageViewerMain || !imageViewerThumbs || !Array.isArray(imageList) || imageList.length === 0) return;
     const idx = Math.max(0, Math.min(index, imageList.length - 1));
-    imageViewerMain.dataset.fallbackSrc = imageList[idx].small || '';
     imageViewerMain.src = imageList[idx].large || imageList[idx].small || '';
     imageViewerThumbs.innerHTML = '';
     imageList.forEach((item, i) => {
