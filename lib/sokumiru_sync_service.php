@@ -27,7 +27,6 @@ class SokumiruSyncService
         if ($kind !== 'actress') {
             throw new LogicException('ジャンル・メーカー・シリーズ等は商品APIのiteminfoから自動登録されます。');
         }
-        $params = array_merge($params, ['category' => 'av', 'gender' => 'f']);
         $response = $this->client->searchActresses($params);
 
         $key = $kind === 'actress' ? 'actor' : $kind;

@@ -22,8 +22,7 @@ final class SokumiruApiClient
     public function searchActresses(array $params = []): array
     {
         $params['category'] = 'av';
-        $params['gender'] = 'f';
-        unset($params['actress_id'], $params['floor_id'], $params['sort']);
+        unset($params['actress_id'], $params['floor_id'], $params['gender'], $params['sort']);
         return $this->request('Actor', $params);
     }
 

@@ -8,10 +8,10 @@ SOKUMIRUアフィリエイトの商品を紹介する、PHP + MySQL/MariaDB製�
 - 商品検索API: `https://sokmil-ad.com/api/v1/Item`
 - 出演者検索API: `https://sokmil-ad.com/api/v1/Actor`
 - カテゴリはアダルト動画（`av`）固定
-- 出演者は女性（`f`）固定
 - グラビア（`idol`）は取得しません
 
 ジャンル、メーカー、シリーズ、レーベル、監督は商品レスポンスの`iteminfo`から自動登録します。SOKUMIRUに存在しないFANZAフロアAPI・作者API等は使用しません。
+女優名とIDも商品レスポンスの`iteminfo.actor`から登録し、出演者検索APIによる画像・プロフィールの補完は商品取得と同じ`auto_import.php` cronの内部ジョブで自動実行します。管理画面に女優API専用の手動取得画面は設けません。
 
 ## セットアップ
 
