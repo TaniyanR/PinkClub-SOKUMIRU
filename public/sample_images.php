@@ -187,13 +187,20 @@ $imagePairs = array_map(static function (string $image): array {
   </div>
   <script>
   (function () {
+    var useFallbackImage = function (image) {
+      var fallback = image.getAttribute('data-fallback-src') || '';
+      if (fallback !== '' && image.src !== fallback) {
+        image.src = fallback;
+      }
+    };
+
     document.querySelectorAll('img[data-fallback-src]').forEach(function (image) {
       image.addEventListener('error', function () {
-        var fallback = image.getAttribute('data-fallback-src') || '';
-        if (fallback !== '' && image.src !== fallback) {
-          image.src = fallback;
-        }
+        useFallbackImage(image);
       }, { once: true });
+      if (image.complete && image.naturalWidth === 0) {
+        useFallbackImage(image);
+      }
     });
 
     var scroller = document.getElementById('sampleScroll');
