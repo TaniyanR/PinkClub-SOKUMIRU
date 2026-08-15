@@ -71,6 +71,30 @@ function sample_images_collect_from_value(mixed $value, array &$images): void
     }
 }
 
+function sample_images_large_url(string $url): string
+{
+    $value = trim($url);
+    $parts = parse_url($value);
+    if ($value === '' || !is_array($parts)) {
+        return $value;
+    }
+
+    $host = strtolower((string)($parts['host'] ?? ''));
+    $path = (string)($parts['path'] ?? '');
+    if ($host !== 'img.sokmil.com' || preg_match('#^/image/capture/cs_(.+)$#i', $path, $matches) !== 1) {
+        return $value;
+    }
+
+    $scheme = strtolower((string)($parts['scheme'] ?? 'https'));
+    if ($scheme !== 'http' && $scheme !== 'https') {
+        $scheme = 'https';
+    }
+
+    $port = isset($parts['port']) ? ':' . (int)$parts['port'] : '';
+    $query = isset($parts['query']) && $parts['query'] !== '' ? '?' . $parts['query'] : '';
+    return $scheme . '://' . $host . $port . '/image/capture/ol_' . $matches[1] . $query;
+}
+
 $contentId = trim((string)get('content_id', ''));
 if ($contentId === '') {
     http_response_code(404);
@@ -89,12 +113,14 @@ $decoded = json_decode((string)($item['raw_json'] ?? ''), true);
 $images = [];
 if (is_array($decoded) && isset($decoded['sampleImageURL'])) {
     if (is_array($decoded['sampleImageURL'])) {
-        sample_images_collect_from_value($decoded['sampleImageURL']['image'] ?? null, $images);
-        foreach (['sample_l', 'sample_s'] as $sizeKey) {
+        foreach (['sample_l', 'image', 'sample_s'] as $sizeKey) {
             $sampleImages = [];
-            sample_images_collect_from_value($decoded['sampleImageURL'][$sizeKey]['image'] ?? null, $sampleImages);
-            if ($sampleImages !== [] && $images === []) {
-                $images = array_merge($images, $sampleImages);
+            $sampleImageValue = $sizeKey === 'image'
+                ? ($decoded['sampleImageURL']['image'] ?? null)
+                : ($decoded['sampleImageURL'][$sizeKey]['image'] ?? null);
+            sample_images_collect_from_value($sampleImageValue, $sampleImages);
+            if ($sampleImages !== []) {
+                $images = $sampleImages;
                 break;
             }
         }
@@ -103,6 +129,12 @@ if (is_array($decoded) && isset($decoded['sampleImageURL'])) {
     }
 }
 $images = array_values(array_unique($images));
+$imagePairs = array_map(static function (string $image): array {
+    return [
+        'small' => $image,
+        'large' => sample_images_large_url($image),
+    ];
+}, $images);
 ?>
 <!doctype html>
 <html lang="ja">
@@ -138,12 +170,12 @@ $images = array_values(array_unique($images));
   <h1><?= e((string)$item['title']) ?> のサンプル画像</h1>
   <div class="sample-viewer">
     <div class="sample-scroll" id="sampleScroll">
-    <?php if ($images === []): ?>
+    <?php if ($imagePairs === []): ?>
       <p class="message">画像がありません</p>
     <?php else: ?>
-      <?php foreach ($images as $index => $image): ?>
+      <?php foreach ($imagePairs as $index => $imagePair): ?>
         <div class="sample-frame">
-          <img src="<?= e($image) ?>" alt="サンプル画像 <?= e((string)($index + 1)) ?>">
+          <img src="<?= e((string)$imagePair['large']) ?>" data-fallback-src="<?= e((string)$imagePair['small']) ?>" alt="サンプル画像 <?= e((string)($index + 1)) ?>">
         </div>
       <?php endforeach; ?>
     <?php endif; ?>
@@ -153,9 +185,24 @@ $images = array_values(array_unique($images));
       <button type="button" class="sample-arrow sample-next" id="sampleNext" aria-label="次のサンプル画像へ">›</button>
     <?php endif; ?>
   </div>
-  <?php if (count($images) > 1): ?>
   <script>
   (function () {
+    var useFallbackImage = function (image) {
+      var fallback = image.getAttribute('data-fallback-src') || '';
+      if (fallback !== '' && image.src !== fallback) {
+        image.src = fallback;
+      }
+    };
+
+    document.querySelectorAll('img[data-fallback-src]').forEach(function (image) {
+      image.addEventListener('error', function () {
+        useFallbackImage(image);
+      }, { once: true });
+      if (image.complete && image.naturalWidth === 0) {
+        useFallbackImage(image);
+      }
+    });
+
     var scroller = document.getElementById('sampleScroll');
     var prevButton = document.getElementById('samplePrev');
     var nextButton = document.getElementById('sampleNext');
@@ -188,6 +235,5 @@ $images = array_values(array_unique($images));
     updateButtons();
   }());
   </script>
-  <?php endif; ?>
 </body>
 </html>
