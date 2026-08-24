@@ -431,7 +431,7 @@ if ($slug === 'about' || $slug === 'privacy-policy') {
     $contactHref = e(public_url('page.php?slug=' . rawurlencode(CONTACT_PAGE_SLUG)));
     $contactLink = '<a href="' . $contactHref . '">お問い合わせ</a>';
     $privacyUrl = public_url('page.php?slug=privacy-policy');
-    $privacyLink = '<a href="' . e($privacyUrl) . '">Privacy Policy（' . e($privacyUrl) . '）</a>';
+    $privacyLink = '<a href="' . e($privacyUrl) . '">Privacy Policy</a>';
     $rankingHtml = $slug === 'about' ? about_access_ranking_html() : '';
     $pageBodyHtml = str_replace(
         ['「お問い合わせ」', '【お問い合わせ】にて', '__PCF_PRIVACY_POLICY_LINK__ページ', '__PCF_PRIVACY_POLICY_LINK__', '__PCF_ACCESS_RANKING__'],

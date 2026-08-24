@@ -127,6 +127,9 @@ if (is_array($decoded) && isset($decoded['sampleImageURL'])) {
     } else {
         sample_images_collect_from_value($decoded['sampleImageURL'], $images);
     }
+    if ($images === []) {
+        sample_images_collect_from_value($decoded['sampleImageURL'], $images);
+    }
 }
 $images = array_values(array_unique($images));
 $imagePairs = array_map(static function (string $image): array {

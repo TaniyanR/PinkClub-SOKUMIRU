@@ -57,15 +57,15 @@ function normalize_movie_url(string $url): string
         return '';
     }
 
-    if (str_starts_with($url, '//')) {
-        return 'https:' . $url;
+    $normalized = str_starts_with($url, '//') ? 'https:' . $url : $url;
+    if (!str_starts_with($normalized, 'http://') && !str_starts_with($normalized, 'https://')) {
+        return '';
     }
-
-    if (str_starts_with($url, 'http://') || str_starts_with($url, 'https://')) {
-        return $url;
+    $host = strtolower((string)(parse_url($normalized, PHP_URL_HOST) ?: ''));
+    if ($host === 'dnlcheck.sokmil.com' || str_ends_with($host, '.dnlcheck.sokmil.com')) {
+        return '';
     }
-
-    return '';
+    return $normalized;
 }
 
 function parse_index_image_urls(?string $value): array
@@ -114,6 +114,34 @@ function index_is_self_hosted_fanza_image_url(string $url): bool
 
     $siteHost = parse_url(public_url(''), PHP_URL_HOST);
     return is_string($siteHost) && strcasecmp($host, $siteHost) === 0;
+}
+
+function items_has_sample_image_value(mixed $value): bool
+{
+    if (is_string($value)) {
+        foreach (parse_index_image_urls($value) as $candidate) {
+            $url = trim((string)$candidate);
+            if (str_starts_with($url, '//')) {
+                $url = 'https:' . $url;
+            }
+            if (filter_var($url, FILTER_VALIDATE_URL) !== false
+                && in_array(strtolower((string)parse_url($url, PHP_URL_SCHEME)), ['http', 'https'], true)
+                && !index_is_self_hosted_fanza_image_url($url)
+            ) {
+                return true;
+            }
+        }
+        return false;
+    }
+    if (!is_array($value)) {
+        return false;
+    }
+    foreach ($value as $child) {
+        if (items_has_sample_image_value($child)) {
+            return true;
+        }
+    }
+    return false;
 }
 
 function collect_movie_urls_from_value(mixed $value, array &$urls): void
@@ -275,7 +303,7 @@ function item_sample_state(array $item): array
     $raw = decode_item_raw($item);
     $movieUrls = [];
     foreach (['sample_movie_url_720', 'sample_movie_url_644', 'sample_movie_url_560', 'sample_movie_url_476'] as $column) {
-        $candidate = trim((string)($item[$column] ?? ''));
+        $candidate = normalize_movie_url((string)($item[$column] ?? ''));
         if ($candidate !== '') {
             $movieUrls[] = $candidate;
         }
@@ -284,22 +312,7 @@ function item_sample_state(array $item): array
     $movieUrls = array_values(array_unique(array_merge($movieUrls, pick_sample_movie_urls_from_raw($raw))));
     $firstMovieUrl = $movieUrls[0] ?? '';
 
-    $hasImageSample = false;
-    $sampleImageUrl = $raw['sampleImageURL'] ?? null;
-    if (is_array($sampleImageUrl)) {
-        foreach (['sample_l', 'sample_s'] as $sampleKey) {
-            $images = $sampleImageUrl[$sampleKey]['image'] ?? null;
-            if (is_array($images)) {
-                foreach ($images as $image) {
-                    $sampleImageCandidate = trim((string)$image);
-                    if ($sampleImageCandidate !== '' && !index_is_self_hosted_fanza_image_url($sampleImageCandidate)) {
-                        $hasImageSample = true;
-                        break 2;
-                    }
-                }
-            }
-        }
-    }
+    $hasImageSample = items_has_sample_image_value($raw['sampleImageURL'] ?? null);
 
     if (!$hasImageSample) {
         foreach (parse_index_image_urls((string)($item['image_list'] ?? '')) as $image) {

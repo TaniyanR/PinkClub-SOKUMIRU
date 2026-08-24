@@ -288,15 +288,15 @@ if (!function_exists('pcf_normalize_movie_url')) {
             return '';
         }
 
-        if (str_starts_with($url, '//')) {
-            return 'https:' . $url;
+        $normalized = str_starts_with($url, '//') ? 'https:' . $url : $url;
+        if (!str_starts_with($normalized, 'http://') && !str_starts_with($normalized, 'https://')) {
+            return '';
         }
-
-        if (str_starts_with($url, 'http://') || str_starts_with($url, 'https://')) {
-            return $url;
+        $host = strtolower((string)(parse_url($normalized, PHP_URL_HOST) ?: ''));
+        if ($host === 'dnlcheck.sokmil.com' || str_ends_with($host, '.dnlcheck.sokmil.com')) {
+            return '';
         }
-
-        return '';
+        return $normalized;
     }
 }
 
@@ -379,18 +379,7 @@ if (!function_exists('pcf_pick_sample_image_urls_from_raw')) {
     function pcf_pick_sample_image_urls_from_raw(array $raw): array
     {
         $images = [];
-        $sampleImageURL = $raw['sampleImageURL'] ?? null;
-        if (is_array($sampleImageURL)) {
-            pcf_collect_sample_image_urls_from_value($sampleImageURL['image'] ?? null, $images);
-            foreach (['sample_l', 'sample_s'] as $sampleKey) {
-                $sampleImages = [];
-                pcf_collect_sample_image_urls_from_value($sampleImageURL[$sampleKey]['image'] ?? null, $sampleImages);
-                if ($sampleImages !== [] && $images === []) {
-                    $images = array_merge($images, $sampleImages);
-                    break;
-                }
-            }
-        }
+        pcf_collect_sample_image_urls_from_value($raw['sampleImageURL'] ?? null, $images);
 
         return array_values(array_unique(array_filter(array_map(static fn($u) => trim((string)$u), $images))));
     }

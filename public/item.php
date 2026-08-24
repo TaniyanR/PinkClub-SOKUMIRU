@@ -13,15 +13,15 @@ function item_normalize_movie_url(string $url): string
         return '';
     }
 
-    if (str_starts_with($url, '//')) {
-        return 'https:' . $url;
+    $normalized = str_starts_with($url, '//') ? 'https:' . $url : $url;
+    if (!str_starts_with($normalized, 'http://') && !str_starts_with($normalized, 'https://')) {
+        return '';
     }
-
-    if (str_starts_with($url, 'http://') || str_starts_with($url, 'https://')) {
-        return $url;
+    $host = strtolower((string)(parse_url($normalized, PHP_URL_HOST) ?: ''));
+    if ($host === 'dnlcheck.sokmil.com' || str_ends_with($host, '.dnlcheck.sokmil.com')) {
+        return '';
     }
-
-    return '';
+    return $normalized;
 }
 
 function item_collect_movie_urls(mixed $value, array &$urls): void

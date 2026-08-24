@@ -20,16 +20,17 @@ class SokumiruNormalizer
         if ($url === '') {
             return null;
         }
-        if (str_starts_with($url, '//')) {
-            return 'https:' . $url;
+        $normalized = str_starts_with($url, '//')
+            ? 'https:' . $url
+            : (str_starts_with($url, 'http://') ? 'https://' . substr($url, 7) : $url);
+        if (!str_starts_with($normalized, 'https://')) {
+            return null;
         }
-        if (str_starts_with($url, 'http://')) {
-            return 'https://' . substr($url, 7);
+        $host = strtolower((string)(parse_url($normalized, PHP_URL_HOST) ?: ''));
+        if ($host === 'dnlcheck.sokmil.com' || str_ends_with($host, '.dnlcheck.sokmil.com')) {
+            return null;
         }
-        if (str_starts_with($url, 'https://')) {
-            return $url;
-        }
-        return null;
+        return $normalized;
     }
 
     private static function collectMovieUrlsFromValue(mixed $value, array &$urls): void
