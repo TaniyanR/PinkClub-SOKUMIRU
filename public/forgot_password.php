@@ -15,29 +15,28 @@ if (!function_exists('e')) {
 
 $message = '';
 if (($_SERVER['REQUEST_METHOD'] ?? 'GET') === 'POST') {
-    rate_limit_check('password_reset');
+    rate_limit_check('password_reset', 3, 900);
     if (!csrf_verify((string)($_POST['_token'] ?? ''))) {
         $message = 'リクエストが無効です。';
     } else {
         $email = trim((string)($_POST['email'] ?? ''));
-        if (!filter_var($email, FILTER_VALIDATE_EMAIL)) {
-            $message = 'メールアドレスの形式が正しくありません。';
-        } else {
+        if (filter_var($email, FILTER_VALIDATE_EMAIL)) {
             $u = null;
-            if (hash_equals(setting_admin_email(''), $email)) {
-                $stmt = db()->query('SELECT id, username FROM admins ORDER BY id ASC LIMIT 1');
+            $stmt = db()->prepare('SELECT id, username, email FROM admins WHERE email=:email LIMIT 1');
+            $stmt->execute([':email' => strtolower($email)]);
                 $admin = $stmt ? $stmt->fetch(PDO::FETCH_ASSOC) : false;
                 if (is_array($admin)) {
                     $u = [
                         'id' => (int)$admin['id'],
                         'username' => (string)$admin['username'],
-                        'email' => $email,
+                        'email' => (string)$admin['email'],
                     ];
                 }
-            }
 
             if (is_array($u) && db_table_exists('admin_password_resets')) {
                 $token = bin2hex(random_bytes(32));
+                db()->prepare('UPDATE admin_password_resets SET used_at=NOW() WHERE admin_user_id=:id AND used_at IS NULL')
+                    ->execute([':id' => (int)$u['id']]);
                 db()->prepare('INSERT INTO admin_password_resets(admin_user_id,token_hash,expires_at) VALUES (:admin_user_id,:token_hash,DATE_ADD(NOW(), INTERVAL 1 HOUR))')
                     ->execute([':admin_user_id' => (int)$u['id'], ':token_hash' => hash('sha256', $token)]);
 
@@ -47,15 +46,7 @@ if (($_SERVER['REQUEST_METHOD'] ?? 'GET') === 'POST') {
                     . "メールアドレス: " . (string)$u['email'] . "\n"
                     . "再設定URL: " . $resetUrl . "\n\n"
                     . "このURLは1時間で期限切れになります。";
-                $ok = @mail($email, '[PinkClub-SOKUMIRU] Password Reset', $body);
-            } else {
-                $ok = true;
-            }
-
-            db()->prepare('INSERT INTO mail_logs(direction,from_name,from_email,to_email,subject,body,status,last_error,created_at,updated_at) VALUES ("out",NULL,:from,:to,:subj,:body,:status,:err,NOW(),NOW())')
-                ->execute([':from' => 'noreply@pinkclub.local', ':to' => $email, ':subj' => 'Password Reset', ':body' => 'パスワード再発行メールを送信しました。', ':status' => $ok ? 'sent' : 'failed', ':err' => $ok ? null : 'mail() unavailable']);
-            if (!$ok) {
-                $message = '現在メールを送信できません。しばらくしてから再度お試しください。';
+                @mail($email, '[' . site_setting_get('site.name', APP_NAME) . '] パスワード再設定', $body);
             }
         }
         if ($message === '') {
@@ -66,6 +57,8 @@ if (($_SERVER['REQUEST_METHOD'] ?? 'GET') === 'POST') {
 
 if (headers_sent() === false) {
     header('X-Robots-Tag: noindex, nofollow');
+    header('Cache-Control: no-store, max-age=0');
+    header('Referrer-Policy: no-referrer');
 }
 
 $faviconPath = trim(site_setting_get('site.favicon_path', ''));

@@ -5,6 +5,8 @@ require_once __DIR__ . '/../public/_bootstrap.php';
 auth_require_admin();
 
 $title = 'サイト設定';
+$defaultTagline = 'SOKUMIRUの新着・人気アダルト動画を、サンプル動画・画像を見ながら出演者やジャンルから手軽に探せる作品情報サイトです。';
+$defaultKeywords = 'PinkClub-SOKUMIRU,SOKUMIRU,新着動画,人気動画,アダルト動画,サンプル動画,サンプル画像,出演者,ジャンル,メーカー,シリーズ';
 $message = null;
 $error = null;
 
@@ -148,10 +150,10 @@ require __DIR__ . '/includes/header.php';
       <input type="url" value="<?= e(public_url('sitemap.php')) ?>" readonly>
     </label>
     <label>キャッチフレーズ（検索結果説明用）
-      <input type="text" name="site_tagline" value="<?= e(site_setting_get('site.tagline', '')) ?>">
+      <input type="text" name="site_tagline" value="<?= e(site_setting_get('site.tagline', $defaultTagline)) ?>">
     </label>
     <label>キーワード（meta keywords）
-      <input type="text" name="site_keywords" value="<?= e(site_setting_get('site.keywords', '')) ?>" placeholder="例: SOKUMIRU,動画,アフィリエイト">
+      <input type="text" name="site_keywords" value="<?= e(site_setting_get('site.keywords', $defaultKeywords)) ?>">
     </label>
 
     <label>タイトルロゴ（横250〜400px / 高さ50〜100px）

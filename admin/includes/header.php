@@ -109,6 +109,11 @@ $faviconType = strtolower((string)pathinfo($faviconPath, PATHINFO_EXTENSION)) ==
     </nav>
   </aside>
   <main class="admin-main">
+    <?php if (empty(auth_user()['initial_setup_completed'])): ?>
+      <div class="admin-notice admin-notice--error" role="alert">
+        <p>初期管理者の認証情報が未設定です。<a href="<?= e(admin_url('personal_settings.php')) ?>">個人設定</a>でログインID、再設定用メールアドレス、パスワードを設定してください。</p>
+      </div>
+    <?php endif; ?>
     <?php if (is_array($flash) && isset($flash['message'])): ?>
       <div class="admin-notice <?= ($flash['type'] ?? '') === 'success' ? 'admin-notice--success' : 'admin-notice--error' ?>"><p><?= e((string)$flash['message']) ?></p></div>
     <?php endif; ?>

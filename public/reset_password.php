@@ -5,6 +5,12 @@ declare(strict_types=1);
 require_once __DIR__ . '/../lib/bootstrap.php';
 require_once __DIR__ . '/partials/_helpers.php';
 
+if (!headers_sent()) {
+    header('X-Robots-Tag: noindex, nofollow');
+    header('Cache-Control: no-store, max-age=0');
+    header('Referrer-Policy: no-referrer');
+}
+
 $token = trim((string)($_GET['token'] ?? ''));
 $reset = false;
 if (db_table_exists('admin_password_resets')) {
@@ -28,17 +34,34 @@ if (($_SERVER['REQUEST_METHOD'] ?? 'GET') === 'POST') {
     } else {
         $password = (string)($_POST['password'] ?? '');
         $passwordConfirm = (string)($_POST['password_confirm'] ?? '');
-        if (strlen($password) < 8) {
-            $error = '新しいパスワードは8文字以上で入力してください。';
+        if (strlen($password) < 12) {
+            $error = '新しいパスワードは12文字以上で入力してください。';
         } elseif ($password !== $passwordConfirm) {
             $error = '確認用パスワードが一致しません。';
         } else {
-            $adminUserId = (int)$reset['admin_user_id'];
-            db()->prepare('UPDATE admins SET password_hash=:h, updated_at=NOW() WHERE id=:id')
-                ->execute([':h' => password_hash($password, PASSWORD_DEFAULT), ':id' => $adminUserId]);
-            db()->prepare('UPDATE admin_password_resets SET used_at=NOW() WHERE id=:id')->execute([':id' => (int)$reset['id']]);
-            $_SESSION['forgot_password_success'] = 'パスワードを再設定しました。新しいパスワードでログインしてください。';
-            app_redirect(login_url());
+            $pdo = db();
+            $pdo->beginTransaction();
+            try {
+                $locked = $pdo->prepare('SELECT r.id,r.admin_user_id,a.username FROM admin_password_resets r JOIN admins a ON a.id=r.admin_user_id WHERE r.id=:id AND r.used_at IS NULL AND r.expires_at>=NOW() FOR UPDATE');
+                $locked->execute([':id' => (int)$reset['id']]);
+                $row = $locked->fetch(PDO::FETCH_ASSOC);
+                if (!is_array($row)) { throw new RuntimeException('invalid reset token'); }
+                if (strcasecmp($password, (string)$row['username']) === 0 || in_array(strtolower($password), ['admin', 'password'], true)) {
+                    $pdo->rollBack();
+                    $error = 'ログインID、admin、password と同じパスワードは使用できません。';
+                } else {
+                    $pdo->prepare('UPDATE admins SET password_hash=:h,session_version=session_version+1,updated_at=NOW() WHERE id=:id')
+                        ->execute([':h' => password_hash($password, PASSWORD_DEFAULT), ':id' => (int)$row['admin_user_id']]);
+                    $pdo->prepare('UPDATE admin_password_resets SET used_at=NOW() WHERE admin_user_id=:id AND used_at IS NULL')
+                        ->execute([':id' => (int)$row['admin_user_id']]);
+                    $pdo->commit();
+                    $_SESSION['forgot_password_success'] = 'パスワードを再設定しました。新しいパスワードでログインしてください。';
+                    app_redirect(login_url());
+                }
+            } catch (Throwable $exception) {
+                if ($pdo->inTransaction()) { $pdo->rollBack(); }
+                if ($error === '') { $error = 'この再設定URLは無効または使用済みです。再発行してください。'; }
+            }
         }
     }
 }
@@ -51,8 +74,8 @@ include __DIR__ . '/partials/login_header.php';
     <?php if ($error !== '') : ?><div class="admin-card login-alert"><p><?php echo e($error); ?></p></div><?php endif; ?>
     <form class="admin-card login-card" method="post" action="<?php echo e(public_url('reset_password.php') . '?token=' . rawurlencode($token)); ?>">
         <input type="hidden" name="_token" value="<?php echo e(csrf_token()); ?>">
-        <label>新しいパスワード</label><input type="password" name="password" minlength="8" required>
-        <label>新しいパスワード（確認）</label><input type="password" name="password_confirm" minlength="8" required>
+        <label for="new-password">新しいパスワード</label><input id="new-password" type="password" name="password" minlength="12" autocomplete="new-password" required>
+        <label for="password-confirm">新しいパスワード（確認）</label><input id="password-confirm" type="password" name="password_confirm" minlength="12" autocomplete="new-password" required>
         <button type="submit">再設定する</button>
     </form>
 </div>
