@@ -279,7 +279,7 @@ function installer_ensure_settings_row(PDO $pdo, string $stepLabel): bool
 
 function installer_status(): array
 {
-    $status = ['server_connection'=>false,'db_connection'=>false,'admins_table'=>false,'settings_table'=>false,'admin_user'=>false,'settings_row'=>false,'completed'=>false];
+    $status = ['server_connection'=>false,'db_connection'=>false,'admins_table'=>false,'settings_table'=>false,'auth_schema'=>false,'admin_user'=>false,'settings_row'=>false,'completed'=>false];
     $status['server_connection'] = installer_can_connect_server();
     if (!$status['server_connection']) {
         $status['completed'] = false;
@@ -293,6 +293,9 @@ function installer_status(): array
     $status['admins_table'] = db_table_exists('admins');
     $status['settings_table'] = db_table_exists('settings');
     if ($status['admins_table']) {
+        $status['auth_schema'] = db_column_exists('admins', 'email')
+            && db_column_exists('admins', 'initial_setup_completed')
+            && db_column_exists('admins', 'session_version');
         $status['admin_user'] = db()->query('SELECT 1 FROM admins ORDER BY id ASC LIMIT 1')->fetchColumn() !== false;
     }
     if ($status['settings_table']) {
@@ -322,6 +325,7 @@ function installer_status(): array
         && $status['db_connection']
         && $status['admins_table']
         && $status['settings_table']
+        && $status['auth_schema']
         && $status['admin_user']
         && $status['settings_row']
     );
@@ -364,7 +368,7 @@ function installer_run(): array
         installer_ensure_settings_row(db(), 'completion_check_retry');
         $status = installer_status();
         if (($status['completed'] ?? false) !== true) {
-            $requiredKeys = ['server_connection', 'db_connection', 'admins_table', 'settings_table', 'admin_user', 'settings_row'];
+            $requiredKeys = ['server_connection', 'db_connection', 'admins_table', 'settings_table', 'auth_schema', 'admin_user', 'settings_row'];
             $failedKeys = array_values(array_filter($requiredKeys, static fn(string $key): bool => ($status[$key] ?? false) !== true));
             installer_log('step=completion_check status=' . json_encode($status, JSON_UNESCAPED_UNICODE | JSON_UNESCAPED_SLASHES) . ' failed_keys=' . json_encode($failedKeys, JSON_UNESCAPED_UNICODE | JSON_UNESCAPED_SLASHES));
             throw new RuntimeException('セットアップ完了条件を満たせませんでした。 status=' . json_encode($status, JSON_UNESCAPED_UNICODE));

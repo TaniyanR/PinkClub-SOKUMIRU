@@ -199,7 +199,7 @@ if ($configErrors === []) {
         app_redirect(LOGIN_PATH);
     }
 } else {
-    $status = ['server_connection'=>false,'db_connection'=>false,'admins_table'=>false,'settings_table'=>false,'admin_user'=>false,'settings_row'=>false,'completed'=>false];
+    $status = ['server_connection'=>false,'db_connection'=>false,'admins_table'=>false,'settings_table'=>false,'auth_schema'=>false,'admin_user'=>false,'settings_row'=>false,'completed'=>false];
     $dbConfigNotice = 'DB設定が未入力です。MySQL情報を入力して保存してください。';
 }
 
@@ -208,6 +208,7 @@ $checks = [
     '対象DB接続' => $status['db_connection'] ?? false,
     'admins テーブル' => $status['admins_table'] ?? false,
     'settings テーブル' => $status['settings_table'] ?? false,
+    '管理者認証カラム' => $status['auth_schema'] ?? false,
     '初期管理者 admin' => $status['admin_user'] ?? false,
     'settings(installer.ready=1)' => $status['settings_row'] ?? false,
 ];
