@@ -33,7 +33,9 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
 
         if (auth_attempt($username, $password)) {
             flash_set('success', 'ログインしました。');
-            app_redirect(ADMIN_HOME_PATH);
+            $destination = empty(auth_user()['initial_setup_completed'])
+                ? '/admin/personal_settings.php?initial=1' : ADMIN_HOME_PATH;
+            app_redirect($destination);
         }
 
         if (auth_last_error() === 'db_error') {
@@ -53,6 +55,7 @@ $faviconType = strtolower((string)pathinfo($faviconPath, PATHINFO_EXTENSION)) ==
 <head>
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <meta name="robots" content="noindex, nofollow">
   <title><?= e(APP_NAME) ?> 管理ログイン</title>
   <?php if ($faviconUrl !== ''): ?>
     <link rel="icon" href="<?= e($faviconUrl) ?>" sizes="any" type="<?= e($faviconType) ?>">
