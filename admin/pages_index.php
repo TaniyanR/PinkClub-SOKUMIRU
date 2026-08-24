@@ -35,6 +35,8 @@ try {
     foreach ($defaults as $defaultPage) {
         $insert->execute($defaultPage);
     }
+    // 新規作成した既定ページにも、現在のリンク表記を直ちに反映する。
+    migrate_contact_page_slug();
     db()->prepare('UPDATE fixed_pages SET body=:body, updated_at=NOW() WHERE slug="about" AND body=:old_body')->execute([
         ':body' => $aboutBody,
         ':old_body' => $oldAboutBody,

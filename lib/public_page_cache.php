@@ -68,7 +68,7 @@ function pcf_public_page_cache_start(int $ttlSeconds = 120): void
     $cacheQuery = [];
     parse_str((string)(parse_url($requestUri, PHP_URL_QUERY) ?? ''), $cacheQuery);
     $allowedCacheQueryKeys = [
-        'all', 'cid', 'content_id', 'fragment', 'group', 'id', 'ids', 'index',
+        'all', 'cid', 'content_id', 'format', 'fragment', 'group', 'id', 'ids', 'index',
         'limit', 'name', 'order', 'page', 'part', 'q', 'rank_period', 'slug', 'type',
     ];
     $numericCacheQueryLimits = ['id' => 2000000000, 'index' => 10000, 'limit' => 200, 'page' => 1000, 'part' => 1000];

@@ -135,6 +135,19 @@ $imagePairs = array_map(static function (string $image): array {
         'large' => sample_images_large_url($image),
     ];
 }, $images);
+
+if (strtolower(trim((string)get('format', ''))) === 'json') {
+    header('Content-Type: application/json; charset=UTF-8');
+    header('Cache-Control: public, max-age=300');
+    echo json_encode([
+        'title' => (string)$item['title'],
+        'images' => array_values(array_map(
+            static fn(array $imagePair): string => (string)$imagePair['large'],
+            $imagePairs
+        )),
+    ], JSON_UNESCAPED_UNICODE | JSON_UNESCAPED_SLASHES | JSON_HEX_TAG | JSON_HEX_AMP);
+    exit;
+}
 ?>
 <!doctype html>
 <html lang="ja">

@@ -85,6 +85,7 @@ $copyrightYears = $copyrightStartYear >= $currentYear
   </div>
   <div class="site-footer__copy">© <?= e($copyrightYears) ?> <a href="<?= e(public_url('')) ?>"><?= e($siteName) ?></a></div>
 </footer>
+<script src="<?= e(asset_url('js/sample-image-modal.js')) ?>" defer></script>
 <script>
 (function () {
   var header = document.querySelector('.site-header');
@@ -242,6 +243,7 @@ $copyrightYears = $copyrightStartYear >= $currentYear
 </script>
 <script>
 (function () {
+  if (navigator.doNotTrack === '1' || window.doNotTrack === '1' || navigator.globalPrivacyControl === true) return;
   var send = function (url, data) {
     if (navigator.sendBeacon && navigator.sendBeacon(url, data)) return true;
     if (window.fetch) {

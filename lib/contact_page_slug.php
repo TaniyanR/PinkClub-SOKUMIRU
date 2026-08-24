@@ -10,6 +10,12 @@ function migrate_contact_page_slug(): void
         return;
     }
 
+    try {
+        db()->exec("UPDATE fixed_pages SET body = REPLACE(body, '[Privacy Policy(URL付き)]ページ', '[Privacy Policy(URL付き)]'), updated_at = NOW() WHERE slug = 'about' AND body LIKE '%[Privacy Policy(URL付き)]ページ%'");
+    } catch (Throwable $e) {
+        error_log('fixed page privacy link normalization failed: ' . $e->getMessage());
+    }
+
     $stmt = db()->prepare('SELECT id FROM fixed_pages WHERE slug = :slug LIMIT 1');
     $stmt->execute([':slug' => CONTACT_PAGE_OLD_SLUG]);
     $contactId = (int)($stmt->fetchColumn() ?: 0);

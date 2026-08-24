@@ -190,33 +190,44 @@ function contact_has_newline(string $value): bool
     return str_contains($value, "\r") || str_contains($value, "\n");
 }
 
-function about_access_ranking_text(): string
+function about_access_ranking_html(): string
 {
     try {
         if (!db_table_exists('in_logs')) {
-            return 'アクセスランキングのデータがありません。';
+            return '<p class="pcf-reverse-ranking__empty">アクセスランキングのデータがありません。</p>';
         }
 
-        $stmt = db()->query('SELECT COALESCE(NULLIF(ps.name, ""), NULLIF(in_logs.referer_host, ""), NULLIF(in_logs.ref_code, "")) AS site_name, COUNT(*) AS in_count FROM in_logs LEFT JOIN partner_sites ps ON ps.ref_code = in_logs.ref_code GROUP BY site_name ORDER BY in_count DESC, site_name ASC LIMIT 10');
+        $stmt = db()->query('SELECT COALESCE(NULLIF(ps.name, ""), NULLIF(in_logs.referer_host, ""), NULLIF(in_logs.ref_code, "")) AS site_name, MAX(NULLIF(ps.url, "")) AS site_url, COUNT(*) AS in_count FROM in_logs LEFT JOIN partner_sites ps ON ps.ref_code = in_logs.ref_code GROUP BY site_name ORDER BY in_count DESC, site_name ASC LIMIT 10');
         $rows = $stmt ? $stmt->fetchAll(PDO::FETCH_ASSOC) : [];
     } catch (Throwable) {
         $rows = [];
     }
 
     if ($rows === []) {
-        return 'アクセスランキングのデータがありません。';
+        return '<p class="pcf-reverse-ranking__empty">アクセスランキングのデータがありません。</p>';
     }
 
-    $lines = [];
+    $html = '<ol class="pcf-reverse-ranking" aria-label="逆アクセスランキング">';
     foreach ($rows as $index => $row) {
         $siteName = trim((string)($row['site_name'] ?? ''));
         if ($siteName === '') {
             $siteName = '不明';
         }
-        $lines[] = (string)($index + 1) . '. ' . $siteName . '：' . (string)((int)($row['in_count'] ?? 0));
+        $siteUrl = trim((string)($row['site_url'] ?? ''));
+        $siteLink = e($siteName);
+        if (filter_var($siteUrl, FILTER_VALIDATE_URL) !== false
+            && in_array(strtolower((string)parse_url($siteUrl, PHP_URL_SCHEME)), ['http', 'https'], true)
+        ) {
+            $siteLink = '<a href="' . e($siteUrl) . '" target="_blank" rel="noopener noreferrer nofollow">' . e($siteName) . '</a>';
+        }
+        $html .= '<li class="pcf-reverse-ranking__row">'
+            . '<span class="pcf-reverse-ranking__position">' . e((string)($index + 1)) . '</span>'
+            . '<span class="pcf-reverse-ranking__site">' . $siteLink . '</span>'
+            . '<span class="pcf-reverse-ranking__count"><strong>' . e((string)((int)($row['in_count'] ?? 0))) . '</strong> access</span>'
+            . '</li>';
     }
 
-    return implode("\n", $lines);
+    return $html . '</ol>';
 }
 
 $slug = trim((string)($_GET['slug'] ?? ''));
@@ -401,7 +412,12 @@ $contactFormId = $isContactPage && !$contactSuccess ? contact_form_issue_id() : 
 if ($slug === 'about' || $slug === 'privacy-policy') {
     $p['body'] = str_replace(
         ['[サイト名]', '[サイトURL]', '[サイトRSS]', '[アクセスランキング]', '[Privacy Policy(URL付き)]'],
-        [site_setting_get('site.title', site_setting_get('site.name', APP_NAME)), site_setting_get('site.url', app_url()), public_url('feed.php'), about_access_ranking_text(), 'Privacy Policy（' . public_url('page.php?slug=privacy-policy') . '）'],
+        [site_setting_get('site.title', site_setting_get('site.name', APP_NAME)), site_setting_get('site.url', app_url()), public_url('feed-60.php'), '__PCF_ACCESS_RANKING__', '__PCF_PRIVACY_POLICY_LINK__'],
+        (string)$p['body']
+    );
+    $p['body'] = str_replace(
+        [public_url('feed.php'), rtrim(app_url(), '/') . '/feed.php'],
+        public_url('feed-60.php'),
         (string)$p['body']
     );
 }
@@ -411,6 +427,18 @@ $pageDescription = (string)($p['seo_description'] ?? '');
 $canonicalUrl = public_url('page.php?slug=' . rawurlencode($slug));
 $ogUrl = $canonicalUrl;
 $pageBodyHtml = nl2br(e((string)$p['body']));
+if ($slug === 'about' || $slug === 'privacy-policy') {
+    $contactHref = e(public_url('page.php?slug=' . rawurlencode(CONTACT_PAGE_SLUG)));
+    $contactLink = '<a href="' . $contactHref . '">お問い合わせ</a>';
+    $privacyUrl = public_url('page.php?slug=privacy-policy');
+    $privacyLink = '<a href="' . e($privacyUrl) . '">Privacy Policy（' . e($privacyUrl) . '）</a>';
+    $rankingHtml = $slug === 'about' ? about_access_ranking_html() : '';
+    $pageBodyHtml = str_replace(
+        ['「お問い合わせ」', '【お問い合わせ】にて', '__PCF_PRIVACY_POLICY_LINK__ページ', '__PCF_PRIVACY_POLICY_LINK__', '__PCF_ACCESS_RANKING__'],
+        ['「' . $contactLink . '」', '【' . $contactLink . '】にて', $privacyLink, $privacyLink, $rankingHtml],
+        $pageBodyHtml
+    );
+}
 if ($slug === 'about') {
     $pageBodyHtml = str_replace(['&lt;h3&gt;', '&lt;/h3&gt;'], ['<h3>', '</h3>'], $pageBodyHtml);
 }
