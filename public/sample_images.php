@@ -101,7 +101,7 @@ if ($contentId === '') {
     exit('content_id が指定されていません。');
 }
 
-$stmt = db()->prepare('SELECT content_id, title, raw_json FROM items WHERE content_id = ? LIMIT 1');
+$stmt = db()->prepare('SELECT content_id, title, raw_json, image_list FROM items WHERE content_id = ? LIMIT 1');
 $stmt->execute([$contentId]);
 $item = $stmt->fetch(PDO::FETCH_ASSOC);
 if (!$item) {
@@ -130,6 +130,9 @@ if (is_array($decoded) && isset($decoded['sampleImageURL'])) {
     if ($images === []) {
         sample_images_collect_from_value($decoded['sampleImageURL'], $images);
     }
+}
+if ($images === []) {
+    sample_images_collect_from_value((string)($item['image_list'] ?? ''), $images);
 }
 $images = array_values(array_unique($images));
 $imagePairs = array_map(static function (string $image): array {

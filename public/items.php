@@ -13,10 +13,6 @@ function take_unique_items_for_home(array $items, array &$usedKeys, int $limit):
         if (!is_array($item)) {
             continue;
         }
-        if (sokumiru_item_is_campaign_landing($item)) {
-            continue;
-        }
-
         $contentId = strtolower(trim((string)($item['content_id'] ?? '')));
         $productId = strtolower(trim((string)($item['product_id'] ?? '')));
         $id = trim((string)($item['id'] ?? ''));
@@ -273,7 +269,6 @@ function index_items_product_source_where(PDO $pdo): string
         $parts[] = 'items.item_source = "sokumiru_product"';
     }
     $parts[] = index_items_front_release_where();
-    $parts[] = sokumiru_regular_product_where('items');
     if (index_table_exists($pdo, 'rss_items') && index_table_exists($pdo, 'rss_sources') && index_column_exists($pdo, 'rss_sources', 'source_type')) {
         $parts[] = 'NOT EXISTS (SELECT 1 FROM rss_items ri INNER JOIN rss_sources rs ON rs.id = ri.source_id WHERE rs.source_type = "partner_link" AND (ri.title = items.title OR ri.url = items.url OR ri.url = items.affiliate_url))';
     }
@@ -312,7 +307,8 @@ function item_sample_state(array $item): array
     $movieUrls = array_values(array_unique(array_merge($movieUrls, pick_sample_movie_urls_from_raw($raw))));
     $firstMovieUrl = $movieUrls[0] ?? '';
 
-    $hasImageSample = items_has_sample_image_value($raw['sampleImageURL'] ?? null);
+    $hasImageSample = items_has_sample_image_value($raw['sampleImageURL'] ?? null)
+        || items_has_sample_image_value($item['image_list'] ?? null);
 
     if (!$hasImageSample) {
         foreach (parse_index_image_urls((string)($item['image_list'] ?? '')) as $image) {
@@ -373,11 +369,11 @@ function render_item_card(array $item, int $width = 180, ?array $taxonomy = null
         $thumbUrl = '';
     }
     ?>
-    <article class="card rail-card rail-card--<?= (int)$width ?>" style="width:<?= (int)$width ?>px;min-width:<?= (int)$width ?>px;max-width:<?= (int)$width ?>px;">
+    <article class="card rail-card rail-card--product rail-card--<?= (int)$width ?>" style="width:<?= (int)$width ?>px;min-width:<?= (int)$width ?>px;max-width:<?= (int)$width ?>px;">
       <?php if ($thumbUrl !== ''): ?>
-        <a href="<?= e($itemUrl) ?>"><img class="thumb" src="<?= e($thumbUrl) ?>" alt="<?= e($title) ?>"<?= $lazyLoad ? ' loading="lazy"' : '' ?> decoding="async" style="width:<?= (int)$width ?>px;max-width:<?= (int)$width ?>px;"></a>
+        <a class="rail-card__image-link" href="<?= e($itemUrl) ?>"><img class="thumb" src="<?= e($thumbUrl) ?>" alt="<?= e($title) ?>"<?= $lazyLoad ? ' loading="lazy"' : '' ?> decoding="async" style="width:<?= (int)$width ?>px;max-width:<?= (int)$width ?>px;"></a>
       <?php else: ?>
-        <div class="rail-card__noimage" style="width:<?= (int)$width ?>px;height:<?= (int)$width ?>px;">画像なし</div>
+        <div class="rail-card__image-link"><div class="rail-card__noimage" style="width:<?= (int)$width ?>px;height:<?= (int)$width ?>px;">画像なし</div></div>
       <?php endif; ?>
       <a class="rail-card__title" href="<?= e($itemUrl) ?>"><?= e($title) ?></a>
       <div class="sample-buttons">
