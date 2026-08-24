@@ -33,9 +33,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
 
         if (auth_attempt($username, $password)) {
             flash_set('success', 'ログインしました。');
-            $destination = empty(auth_user()['initial_setup_completed'])
-                ? '/admin/personal_settings.php?initial=1' : ADMIN_HOME_PATH;
-            app_redirect($destination);
+            app_redirect(ADMIN_HOME_PATH);
         }
 
         if (auth_last_error() === 'db_error') {

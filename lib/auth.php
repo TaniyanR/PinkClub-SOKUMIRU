@@ -74,10 +74,6 @@ function auth_require_admin(): void
         app_redirect('/public/setup_check.php');
     }
 
-    if (empty(auth_user()['initial_setup_completed']) && basename((string)($_SERVER['SCRIPT_NAME'] ?? '')) !== 'personal_settings.php') {
-        app_redirect('/admin/personal_settings.php?initial=1');
-    }
-
     if (!headers_sent()) {
         header('Cache-Control: private, no-store, max-age=0');
         header('Pragma: no-cache');
