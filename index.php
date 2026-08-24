@@ -143,15 +143,15 @@ function normalize_movie_url(string $url): string
         return '';
     }
 
-    if (str_starts_with($url, '//')) {
-        return 'https:' . $url;
+    $normalized = str_starts_with($url, '//') ? 'https:' . $url : $url;
+    if (!str_starts_with($normalized, 'http://') && !str_starts_with($normalized, 'https://')) {
+        return '';
     }
-
-    if (str_starts_with($url, 'http://') || str_starts_with($url, 'https://')) {
-        return $url;
+    $host = strtolower((string)(parse_url($normalized, PHP_URL_HOST) ?: ''));
+    if ($host === 'dnlcheck.sokmil.com' || str_ends_with($host, '.dnlcheck.sokmil.com')) {
+        return '';
     }
-
-    return '';
+    return $normalized;
 }
 
 
@@ -205,6 +205,33 @@ function parse_index_image_urls(?string $value): array
     }
 
     return array_values(array_filter(array_map('trim', $parts), static fn(string $v): bool => $v !== ''));
+}
+
+function has_sample_image_value(mixed $value): bool
+{
+    if (is_string($value)) {
+        foreach (parse_index_image_urls($value) as $candidate) {
+            $url = trim((string)$candidate);
+            if (str_starts_with($url, '//')) {
+                $url = 'https:' . $url;
+            }
+            if (filter_var($url, FILTER_VALIDATE_URL) !== false
+                && in_array(strtolower((string)parse_url($url, PHP_URL_SCHEME)), ['http', 'https'], true)
+            ) {
+                return true;
+            }
+        }
+        return false;
+    }
+    if (!is_array($value)) {
+        return false;
+    }
+    foreach ($value as $child) {
+        if (has_sample_image_value($child)) {
+            return true;
+        }
+    }
+    return false;
 }
 
 function collect_movie_urls_from_value(mixed $value, array &$urls): void
@@ -319,7 +346,7 @@ function item_sample_state(array $item): array
     $raw = decode_item_raw($item);
     $movieUrls = [];
     foreach (['sample_movie_url_720', 'sample_movie_url_644', 'sample_movie_url_560', 'sample_movie_url_476'] as $column) {
-        $candidate = trim((string)($item[$column] ?? ''));
+        $candidate = normalize_movie_url((string)($item[$column] ?? ''));
         if ($candidate !== '') {
             $movieUrls[] = $candidate;
         }
@@ -328,33 +355,7 @@ function item_sample_state(array $item): array
     $movieUrls = array_values(array_unique(array_merge($movieUrls, pick_sample_movie_urls_from_raw($raw))));
     $firstMovieUrl = $movieUrls[0] ?? '';
 
-    $hasImageSample = false;
-    $sampleImageUrl = $raw['sampleImageURL'] ?? null;
-    if (is_array($sampleImageUrl)) {
-        $directImages = $sampleImageUrl['image'] ?? null;
-        if (is_string($directImages) && trim($directImages) !== '') {
-            $hasImageSample = true;
-        } elseif (is_array($directImages)) {
-            foreach ($directImages as $image) {
-                if (is_string($image) && trim($image) !== '') {
-                    $hasImageSample = true;
-                    break;
-                }
-            }
-        }
-
-        foreach (['sample_l', 'sample_s'] as $sampleKey) {
-            $images = $sampleImageUrl[$sampleKey]['image'] ?? null;
-            if (is_array($images)) {
-                foreach ($images as $image) {
-                    if (trim((string)$image) !== '') {
-                        $hasImageSample = true;
-                        break 2;
-                    }
-                }
-            }
-        }
-    }
+    $hasImageSample = has_sample_image_value($raw['sampleImageURL'] ?? null);
 
     return ['movie_url' => $firstMovieUrl, 'movie_urls' => $movieUrls, 'has_images' => $hasImageSample];
 }
@@ -387,7 +388,7 @@ function render_item_card(array $item, int $width = 180, ?array $taxonomy = null
     $sample = item_sample_state($item);
     $movieClass = $sample['movie_url'] !== '' ? 'sample-button sample-button--enabled' : 'sample-button sample-button--disabled';
     $imageClass = $sample['has_images'] ? 'sample-button sample-button--enabled' : 'sample-button sample-button--disabled';
-    $sampleImagesUrl = public_url('sample_images.php?content_id=' . rawurlencode((string)($item['content_id'] ?? '')));
+    $sampleImagesUrl = public_url('sample_images.php?content_id=' . rawurlencode((string)($item['content_id'] ?? '')) . '&format=json');
     $thumbUrl = trim((string)($item['image_small'] ?? ''));
     if ($preferFullPackageImage) {
         $fullPackageImage = pick_full_package_image($item);
@@ -410,7 +411,7 @@ function render_item_card(array $item, int $width = 180, ?array $taxonomy = null
         <?php $releaseDateRaw = trim((string)($item['release_date'] ?? '')); ?>
         <span style="display:block;width:100%;padding:12px 10px;text-align:center;color:#000;background:transparent;border:1px solid #000;border-radius:4px;font-size:14px;font-weight:700;box-sizing:border-box;"><?= $releaseDateRaw !== '' ? '発売日：' . e(format_date($releaseDateRaw)) : '発売日' ?></span>
         <button type="button" class="<?= e($movieClass) ?> sample-movie-trigger" <?= $sample['movie_url'] === '' ? 'disabled' : '' ?> data-movie-url="<?= e((string)$sample['movie_url']) ?>" data-movie-title="<?= e($title) ?>">サンプル動画</button>
-        <button type="button" class="<?= e($imageClass) ?>" <?= !$sample['has_images'] ? 'disabled' : '' ?> onclick="<?= $sample['has_images'] ? "window.open('" . e($sampleImagesUrl) . "','_blank','noopener,noreferrer,width=760,height=540');" : 'return false;' ?>">サンプル画像</button>
+        <button type="button" class="<?= e($imageClass) ?><?= $sample['has_images'] ? ' sample-image-trigger' : '' ?>" <?= !$sample['has_images'] ? 'disabled' : '' ?><?= $sample['has_images'] ? ' data-sample-images-url="' . e($sampleImagesUrl) . '" data-sample-images-title="' . e($title) . '"' : '' ?>>サンプル画像</button>
       </div>
     </article>
     <?php

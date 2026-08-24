@@ -288,15 +288,15 @@ if (!function_exists('pcf_normalize_movie_url')) {
             return '';
         }
 
-        if (str_starts_with($url, '//')) {
-            return 'https:' . $url;
+        $normalized = str_starts_with($url, '//') ? 'https:' . $url : $url;
+        if (!str_starts_with($normalized, 'http://') && !str_starts_with($normalized, 'https://')) {
+            return '';
         }
-
-        if (str_starts_with($url, 'http://') || str_starts_with($url, 'https://')) {
-            return $url;
+        $host = strtolower((string)(parse_url($normalized, PHP_URL_HOST) ?: ''));
+        if ($host === 'dnlcheck.sokmil.com' || str_ends_with($host, '.dnlcheck.sokmil.com')) {
+            return '';
         }
-
-        return '';
+        return $normalized;
     }
 }
 
@@ -379,18 +379,7 @@ if (!function_exists('pcf_pick_sample_image_urls_from_raw')) {
     function pcf_pick_sample_image_urls_from_raw(array $raw): array
     {
         $images = [];
-        $sampleImageURL = $raw['sampleImageURL'] ?? null;
-        if (is_array($sampleImageURL)) {
-            pcf_collect_sample_image_urls_from_value($sampleImageURL['image'] ?? null, $images);
-            foreach (['sample_l', 'sample_s'] as $sampleKey) {
-                $sampleImages = [];
-                pcf_collect_sample_image_urls_from_value($sampleImageURL[$sampleKey]['image'] ?? null, $sampleImages);
-                if ($sampleImages !== [] && $images === []) {
-                    $images = array_merge($images, $sampleImages);
-                    break;
-                }
-            }
-        }
+        pcf_collect_sample_image_urls_from_value($raw['sampleImageURL'] ?? null, $images);
 
         return array_values(array_unique(array_filter(array_map(static fn($u) => trim((string)$u), $images))));
     }
@@ -607,7 +596,7 @@ if (!function_exists('pcf_render_item_card')) {
             $sampleMovieUrl = (string)($movieUrls[0] ?? '');
         }
 
-        $sampleImagesUrl = public_url('sample_images.php?content_id=' . rawurlencode($contentId));
+        $sampleImagesUrl = public_url('sample_images.php?content_id=' . rawurlencode($contentId) . '&format=json');
         $hasSampleImages = pcf_pick_sample_image_urls_from_raw($raw) !== [];
         if (!$hasSampleImages) {
             foreach (pcf_parse_image_urls((string)($item['image_list'] ?? '')) as $image) {
@@ -638,7 +627,7 @@ if (!function_exists('pcf_render_item_card')) {
             echo '<span class="pcf-dm-card__button is-disabled">サンプル動画</span>';
         }
         if ($hasSampleImages && $contentId !== '') {
-            echo '<button type="button" class="pcf-dm-card__button" onclick="window.open(\'' . e($sampleImagesUrl) . '\',\'_blank\',\'noopener,noreferrer,width=760,height=540\');">サンプル画像</button>';
+            echo '<button type="button" class="pcf-dm-card__button sample-image-trigger" data-sample-images-url="' . e($sampleImagesUrl) . '" data-sample-images-title="' . e($title) . '">サンプル画像</button>';
         } else {
             echo '<span class="pcf-dm-card__button is-disabled">サンプル画像</span>';
         }

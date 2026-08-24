@@ -8,14 +8,15 @@ auth_require_admin();
 $title = 'Settings';
 $settings = settings_get();
 $result = null;
+$resultType = 'success';
 
 if ($_SERVER['REQUEST_METHOD'] === 'POST') {
     csrf_validate_or_fail(post('_csrf'));
     $action = (string) post('action');
     $apiId = trim((string) post('api_id', ''));
-    settings_save($apiId);
-
+    $affiliateId = trim((string) post('affiliate_id', ''));
     try {
+        settings_save($apiId, $affiliateId);
         $client = sokumiru_client_from_settings();
         if ($action === 'test') {
             $client->fetchItems('SOKUMIRU', 'sokumiru', 'av', ['hits' => 1, 'offset' => 1, 'sort' => 'date']);
@@ -25,6 +26,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
         }
     } catch (Throwable $e) {
         $result = 'エラー: ' . $e->getMessage();
+        $resultType = 'error';
     }
     $settings = settings_get();
 }
@@ -33,11 +35,14 @@ require __DIR__ . '/includes/header.php';
 ?>
 <section class="admin-card">
   <h1>Settings</h1>
-  <?php if ($result): ?><div class="admin-notice admin-notice--success"><p><?= e($result) ?></p></div><?php endif; ?>
+  <?php if ($result): ?><div class="admin-notice <?= $resultType === 'success' ? 'admin-notice--success' : 'admin-notice--error' ?>"><p><?= e($result) ?></p></div><?php endif; ?>
   <form method="post">
     <?= csrf_input() ?>
-    <label>API KEY
-      <input type="password" name="api_id" value="<?= e($settings['api_id'] ?? '') ?>" autocomplete="off">
+    <label>API KEY（必須）
+      <input type="password" name="api_id" value="<?= e($settings['api_id'] ?? '') ?>" autocomplete="off" required>
+    </label>
+    <label>アフィリエイトID（必須）
+      <input type="text" name="affiliate_id" value="<?= e($settings['affiliate_id'] ?? '') ?>" autocomplete="off" required>
     </label>
     <div class="admin-actions">
       <button name="action" value="save" type="submit">保存</button>
