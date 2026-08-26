@@ -68,10 +68,6 @@ function take_unique_items_for_home(array $items, array &$usedKeys, int $limit):
         if (!is_array($item)) {
             continue;
         }
-        if (sokumiru_item_is_campaign_landing($item)) {
-            continue;
-        }
-
         $contentId = strtolower(trim((string)($item['content_id'] ?? '')));
         $productId = strtolower(trim((string)($item['product_id'] ?? '')));
         $id = trim((string)($item['id'] ?? ''));
@@ -355,7 +351,8 @@ function item_sample_state(array $item): array
     $movieUrls = array_values(array_unique(array_merge($movieUrls, pick_sample_movie_urls_from_raw($raw))));
     $firstMovieUrl = $movieUrls[0] ?? '';
 
-    $hasImageSample = has_sample_image_value($raw['sampleImageURL'] ?? null);
+    $hasImageSample = has_sample_image_value($raw['sampleImageURL'] ?? null)
+        || has_sample_image_value($item['image_list'] ?? null);
 
     return ['movie_url' => $firstMovieUrl, 'movie_urls' => $movieUrls, 'has_images' => $hasImageSample];
 }
@@ -400,11 +397,11 @@ function render_item_card(array $item, int $width = 180, ?array $taxonomy = null
         $thumbUrl = trim((string)($item['image_large'] ?? ''));
     }
     ?>
-    <article class="card rail-card rail-card--<?= (int)$width ?>" style="width:<?= (int)$width ?>px;min-width:<?= (int)$width ?>px;max-width:<?= (int)$width ?>px;">
+    <article class="card rail-card rail-card--product rail-card--<?= (int)$width ?>" style="width:<?= (int)$width ?>px;min-width:<?= (int)$width ?>px;max-width:<?= (int)$width ?>px;">
       <?php if ($thumbUrl !== ''): ?>
-        <a href="<?= e($itemUrl) ?>"><img class="thumb" src="<?= e($thumbUrl) ?>" alt="<?= e($title) ?>"<?= $lazyLoad ? ' loading="lazy"' : '' ?> decoding="async" style="width:<?= (int)$width ?>px;max-width:<?= (int)$width ?>px;"></a>
+        <a class="rail-card__image-link" href="<?= e($itemUrl) ?>"><img class="thumb" src="<?= e($thumbUrl) ?>" alt="<?= e($title) ?>"<?= $lazyLoad ? ' loading="lazy"' : '' ?> decoding="async" style="width:<?= (int)$width ?>px;max-width:<?= (int)$width ?>px;"></a>
       <?php else: ?>
-        <div class="rail-card__noimage" style="width:<?= (int)$width ?>px;height:<?= (int)$width ?>px;">画像なし</div>
+        <div class="rail-card__image-link"><div class="rail-card__noimage" style="width:<?= (int)$width ?>px;height:<?= (int)$width ?>px;">画像なし</div></div>
       <?php endif; ?>
       <a class="rail-card__title" href="<?= e($itemUrl) ?>"><?= e($title) ?></a>
       <div class="sample-buttons">

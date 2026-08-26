@@ -522,6 +522,37 @@ body.admin-page .admin-menu__child .admin-menu__link{padding-left:28px;font-weig
 .rail-row--no-scroll{overflow-x:visible;flex-wrap:wrap}
 .rail-row--bottom-scroll{overflow-x:auto;overflow-y:hidden;flex-wrap:nowrap}
 .rail-row--top-shift .rail-card .thumb{position:relative;top:-5px}
+.rail-row--210 .rail-card--product{align-self:stretch}
+.rail-row--210 .rail-card--product .rail-card__image-link{
+  display:flex;
+  width:100%;
+  aspect-ratio:3 / 4;
+  align-items:center;
+  justify-content:center;
+  overflow:hidden;
+  border-radius:6px;
+  background:#fff;
+}
+.rail-row--210 .rail-card--product .rail-card__image-link .thumb{
+  position:static;
+  top:auto;
+  width:100% !important;
+  max-width:100% !important;
+  height:100%;
+  object-fit:contain;
+  border-radius:0;
+}
+.rail-row--210 .rail-card--product .rail-card__image-link .rail-card__noimage{
+  width:100% !important;
+  max-width:100% !important;
+  height:100% !important;
+  border-radius:0;
+}
+.rail-row--210 .rail-card--product .rail-card__title{
+  height:calc(1.4em * 3);
+  min-height:calc(1.4em * 3);
+}
+.rail-row--210 .rail-card--product .sample-buttons{margin-top:auto}
 @media (min-width:901px){
   .home-feature-section .rail-row--210.rail-row--top-shift .rail-card .rail-card__noimage{
     position:relative;
