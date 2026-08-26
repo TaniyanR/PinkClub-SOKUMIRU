@@ -9,4 +9,6 @@ if(session_status()!==PHP_SESSION_ACTIVE){$sessionLifetime=(int)($config['securi
 date_default_timezone_set('Asia/Tokyo');
 require_once __DIR__.'/helpers.php';
 if(!headers_sent()){header('X-Content-Type-Options: nosniff');header('X-Frame-Options: SAMEORIGIN');header('Referrer-Policy: strict-origin-when-cross-origin');header('Permissions-Policy: camera=(), microphone=(), geolocation=()');$requestPath=(string)(parse_url((string)($_SERVER['REQUEST_URI']??'/'),PHP_URL_PATH)?:'/');$scriptName=basename((string)($_SERVER['SCRIPT_NAME']??''));if(str_contains($requestPath,'/admin/')||in_array($scriptName,['login0718.php','forgot_password.php','reset_password.php','setup_check.php'],true))header('X-Robots-Tag: noindex, nofollow',true);}
-require_once __DIR__.'/db.php';require_once __DIR__.'/auth.php';require_once __DIR__.'/csrf.php';require_once __DIR__.'/installer.php';require_once __DIR__.'/setup_guard.php';setup_guard_bootstrap_installed_marker();require_once __DIR__.'/paginator.php';require_once __DIR__.'/app.php';
+require_once __DIR__.'/db.php';require_once __DIR__.'/auth.php';require_once __DIR__.'/csrf.php';require_once __DIR__.'/installer.php';require_once __DIR__.'/setup_guard.php';
+$__setupScript=basename((string)($_SERVER['SCRIPT_NAME']??''));if($__setupScript==='setup_check.php')setup_guard_enforce_for_setup_page();else setup_guard_bootstrap_installed_marker();unset($__setupScript);
+require_once __DIR__.'/paginator.php';require_once __DIR__.'/app.php';
