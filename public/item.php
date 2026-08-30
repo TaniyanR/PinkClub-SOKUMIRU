@@ -93,6 +93,30 @@ function item_parse_image_urls(?string $value): array
     return array_values(array_filter(array_map('trim', $parts), static fn(string $v): bool => $v !== ''));
 }
 
+function item_large_sample_image_url(string $url): string
+{
+    $value = trim($url);
+    $parts = parse_url($value);
+    if ($value === '' || !is_array($parts)) {
+        return $value;
+    }
+
+    $host = strtolower((string)($parts['host'] ?? ''));
+    $path = (string)($parts['path'] ?? '');
+    if ($host !== 'img.sokmil.com' || preg_match('#^/image/capture/(?:ss|ms|cs|ts)_(.+)$#i', $path, $matches) !== 1) {
+        return $value;
+    }
+
+    $scheme = strtolower((string)($parts['scheme'] ?? 'https'));
+    if ($scheme !== 'http' && $scheme !== 'https') {
+        $scheme = 'https';
+    }
+
+    $port = isset($parts['port']) ? ':' . (int)$parts['port'] : '';
+    $query = isset($parts['query']) && $parts['query'] !== '' ? '?' . $parts['query'] : '';
+    return $scheme . '://' . $host . $port . '/image/capture/ol_' . $matches[1] . $query;
+}
+
 function item_collect_sample_image_urls(mixed $value, array &$images): void
 {
     if (is_string($value)) {
@@ -392,25 +416,34 @@ if ($sampleMovieUrl === '') {
     $sampleMovieUrl = (string)($sampleMovieUrls[0] ?? '');
 }
 
-$sampleImages = [];
+$sampleImagesLarge = [];
+$sampleImagesFallback = [];
 $sampleImagesSmall = [];
 $sampleImageUrl = $raw['sampleImageURL'] ?? null;
 if (is_array($sampleImageUrl)) {
-    item_collect_sample_image_urls($sampleImageUrl['image'] ?? null, $sampleImages);
-    item_collect_sample_image_urls($sampleImageUrl['sample_l']['image'] ?? null, $sampleImages);
+    item_collect_sample_image_urls($sampleImageUrl['sample_l']['image'] ?? null, $sampleImagesLarge);
+    item_collect_sample_image_urls($sampleImageUrl['image'] ?? null, $sampleImagesFallback);
     item_collect_sample_image_urls($sampleImageUrl['sample_s']['image'] ?? null, $sampleImagesSmall);
 } elseif (is_string($sampleImageUrl)) {
-    item_collect_sample_image_urls($sampleImageUrl, $sampleImages);
+    item_collect_sample_image_urls($sampleImageUrl, $sampleImagesFallback);
 }
-$sampleImages = array_values(array_unique($sampleImages));
+
+if ($sampleImagesLarge === []) {
+    $sampleImagesLarge = $sampleImagesFallback !== [] ? $sampleImagesFallback : $sampleImagesSmall;
+}
+if ($sampleImagesSmall === []) {
+    $sampleImagesSmall = $sampleImagesFallback !== [] ? $sampleImagesFallback : $sampleImagesLarge;
+}
+
+$sampleImagesLarge = array_values(array_unique(array_map('item_large_sample_image_url', $sampleImagesLarge)));
 $sampleImagesSmall = array_values(array_unique($sampleImagesSmall));
-$sampleImages = array_values(array_filter(array_slice($sampleImages, 0, 24), static fn($url) => !pcf_is_self_hosted_fanza_image_url((string)$url)));
+$sampleImagesLarge = array_values(array_filter(array_slice($sampleImagesLarge, 0, 24), static fn($url) => !pcf_is_self_hosted_fanza_image_url((string)$url)));
 $sampleImagesSmall = array_values(array_filter(array_slice($sampleImagesSmall, 0, 24), static fn($url) => !pcf_is_self_hosted_fanza_image_url((string)$url)));
 $sampleImagesSmallLargeMap = [];
-$sampleImageCount = max(count($sampleImages), count($sampleImagesSmall));
+$sampleImageCount = max(count($sampleImagesLarge), count($sampleImagesSmall));
 for ($i = 0; $i < $sampleImageCount; $i++) {
-    $smallImage = trim((string)($sampleImagesSmall[$i] ?? $sampleImages[$i] ?? ''));
-    $largeImage = trim((string)($sampleImages[$i] ?? $smallImage));
+    $largeImage = trim((string)($sampleImagesLarge[$i] ?? $sampleImagesSmall[$i] ?? ''));
+    $smallImage = trim((string)($sampleImagesSmall[$i] ?? $largeImage));
     if ($smallImage === '' || $largeImage === '') {
         continue;
     }
@@ -734,57 +767,28 @@ require __DIR__ . '/partials/header.php';
   <?php endif; ?>
 
 
-  <section id="access-ranking" class="block" style="margin-top:24px;">
-    <h2 class="section-title">人気の作品ランキング！</h2>
-  <div style="display:flex; gap:8px; flex-wrap:wrap; margin-bottom:8px;">
-    <?php foreach ($accessRankingTabs as $tabKey => $tabConfig): ?>
-      <?php
-      $tabQuery = ['rank_period' => (string)$tabKey];
-      if ($id > 0) {
-          $tabQuery['id'] = (string)$id;
+<?php pcf_render_item_access_ranking(
+      $accessRankingTabs,
+      $accessRankingPeriod,
+      static function (string $period) use ($id, $contentId, $cid): string {
+          $tabQuery = ['rank_period' => $period];
+          if ($id > 0) {
+              $tabQuery['id'] = (string)$id;
+          }
+          if ($contentId !== '') {
+              $tabQuery['content_id'] = $contentId;
+          }
+          if ($cid !== '') {
+              $tabQuery['cid'] = $cid;
+          }
+          return public_url('item.php') . '?' . http_build_query($tabQuery) . '#access-ranking';
+      },
+      $accessRankingRows,
+      static function (array $row): string {
+          $itemId = (int)($row['id'] ?? 0);
+          return $itemId > 0 ? public_url('item.php') . '?id=' . rawurlencode((string)$itemId) : '';
       }
-      if ($contentId !== '') {
-          $tabQuery['content_id'] = $contentId;
-      }
-      if ($cid !== '') {
-          $tabQuery['cid'] = $cid;
-      }
-      $tabUrl = public_url(basename(__FILE__)) . '?' . http_build_query($tabQuery) . '#access-ranking';
-      ?>
-      <?php $tabStyle = $accessRankingPeriod === $tabKey ? 'display:inline-block; padding:6px 12px; border:1px solid #0b5ed7; border-radius:6px; background:#0b5ed7; color:#fff; font-weight:700; text-decoration:none;' : 'display:inline-block; padding:6px 12px; border:1px solid #0b5ed7; border-radius:6px; background:#fff; color:#0b5ed7; font-weight:700; text-decoration:none;'; ?>
-      <a href="<?= e($tabUrl) ?>" rel="nofollow" style="<?= e($tabStyle) ?>"><?= e((string)$tabConfig['label']) ?></a>
-    <?php endforeach; ?>
-  </div>
-    <?php if ($accessRankingRows !== []): ?>
-      <div style="max-height:800px; overflow-y:auto; border:1px solid #ddd;">
-        <table style="width:100%; border-collapse:collapse; table-layout:fixed;">
-          <thead>
-            <tr>
-              <th style="width:80px; text-align:center; padding:8px; border-bottom:1px solid #ddd; background:#0b5ed7; color:#fff;">順位</th>
-              <th style="width:auto; text-align:center; padding:8px; border-bottom:1px solid #ddd; background:#0b5ed7; color:#fff;">作品タイトル</th>
-              <th style="width:120px; text-align:center; padding:8px; border-bottom:1px solid #ddd; background:#0b5ed7; color:#fff;">ランキング点</th>
-            </tr>
-          </thead>
-          <tbody>
-            <?php foreach ($accessRankingRows as $index => $rankingRow): ?>
-              <tr>
-                <td style="padding:8px; border-bottom:1px solid #eee; text-align:center;"><?= e((string)($index + 1)) ?></td>
-                <td style="padding:8px; border-bottom:1px solid #eee; text-align:left;">
-                <?php
-                $rankingItemUrl = public_url('item.php') . '?id=' . rawurlencode((string)($rankingRow['id'] ?? ''));
-                ?>
-                <a href="<?= e($rankingItemUrl) ?>"><?= e((string)($rankingRow['title'] ?? '')) ?></a>
-              </td>
-                <td style="padding:8px; border-bottom:1px solid #eee; text-align:center;"><?= e((string)((int)($rankingRow['access_count'] ?? 0))) ?></td>
-              </tr>
-            <?php endforeach; ?>
-          </tbody>
-        </table>
-      </div>
-    <?php else: ?>
-      <?php pcf_render_empty('人気の作品ランキング！のデータがありません。'); ?>
-    <?php endif; ?>
-  </section>
+  ); ?>
 
 </article>
 
