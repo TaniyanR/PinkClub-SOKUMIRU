@@ -688,7 +688,7 @@ require __DIR__ . '/partials/header.php';
 <?php pcf_render_breadcrumbs([
     ['label' => 'トップ', 'url' => public_url('index.php')],
     ['label' => '商品一覧', 'url' => public_url('items.php')],
-    ['label' => $breadcrumbTitle],
+    ['label' => $breadcrumbTitle, 'url' => $canonicalUrl],
 ]); ?>
 
 <article>
