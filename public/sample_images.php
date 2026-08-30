@@ -81,7 +81,7 @@ function sample_images_large_url(string $url): string
 
     $host = strtolower((string)($parts['host'] ?? ''));
     $path = (string)($parts['path'] ?? '');
-    if ($host !== 'img.sokmil.com' || preg_match('#^/image/capture/cs_(.+)$#i', $path, $matches) !== 1) {
+    if ($host !== 'img.sokmil.com' || preg_match('#^/image/capture/(?:ss|ms|cs|ts)_(.+)$#i', $path, $matches) !== 1) {
         return $value;
     }
 
