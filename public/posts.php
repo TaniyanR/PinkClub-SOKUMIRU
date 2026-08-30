@@ -112,7 +112,7 @@ include __DIR__ . '/partials/header.php';
                                 <div class="product-card__actions">
                                     <a class="button" href="<?php echo e(public_url('item.php?id=' . (int)$item['id'])); ?>">詳細</a>
                                     <?php if (!empty($item['affiliate_url'])) : ?>
-                                        <a class="button button--primary" href="<?php echo e((string)$item['affiliate_url']); ?>" target="_blank" rel="noopener noreferrer">購入</a>
+                                        <a class="button button--primary" href="<?php echo e((string)$item['affiliate_url']); ?>" target="_blank" rel="sponsored nofollow noopener noreferrer">購入</a>
                                     <?php endif; ?>
                                 </div>
                             </div>

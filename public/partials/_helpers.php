@@ -3,14 +3,16 @@
 if (!function_exists('get_ad_code')) {
     function get_ad_code(string $position_key): ?string
     {
+        static $cache = [];
+        if (array_key_exists($position_key, $cache)) return $cache[$position_key];
         if (!function_exists('db')) return null;
         try {
             $stmt = db()->prepare('SELECT snippet_html FROM code_snippets WHERE slot_key = :slot AND is_enabled = 1 LIMIT 1');
             $stmt->execute([':slot' => $position_key]);
             $html = $stmt->fetchColumn();
             $code = is_string($html) ? trim($html) : '';
-            return $code !== '' ? $code : null;
-        } catch (Throwable) { return null; }
+            return $cache[$position_key] = ($code !== '' ? $code : null);
+        } catch (Throwable) { return $cache[$position_key] = null; }
     }
 }
 
@@ -18,7 +20,62 @@ if (!function_exists('render_ad')) {
     function render_ad(string $position_key, string $page_type = 'home', string $device = 'pc'): void
     {
         $html = get_ad_code($position_key);
-        if ($html !== null) echo $html;
+        if ($html !== null) render_deferred_ad_html($html, $position_key);
+    }
+}
+
+if (!function_exists('render_deferred_ad_html')) {
+    function render_deferred_ad_html(string $html, string $positionKey = ''): void
+    {
+        $html = trim($html);
+        if ($html === '') return;
+
+        static $counter = 0;
+        static $listenerRendered = false;
+        $counter++;
+        $token = 'pcf-ad-' . $counter;
+        $isRectangle = str_contains($positionKey, 'sidebar') || $positionKey === 'content_bottom';
+        $height = $isRectangle ? 250 : 100;
+        $loading = str_contains($positionKey, 'header') ? 'eager' : 'lazy';
+
+        if (!$listenerRendered) {
+            $listenerRendered = true;
+            ?>
+<script>
+(function(){
+  if(window.__pcfAdResizeReady)return;
+  window.__pcfAdResizeReady=true;
+  window.addEventListener('message',function(event){
+    var data=event.data;
+    if(!data||data.type!=='pcf-ad-height'||typeof data.token!=='string')return;
+    var frames=document.querySelectorAll('iframe[data-pcf-ad-token]');
+    var frame=null;
+    for(var i=0;i<frames.length;i++){
+      if(frames[i].dataset.pcfAdToken===data.token){frame=frames[i];break;}
+    }
+    if(!frame||event.source!==frame.contentWindow)return;
+    var height=Math.max(20,Math.min(1200,Number(data.height)||0));
+    if(height)frame.style.height=Math.ceil(height)+'px';
+  });
+}());
+</script>
+            <?php
+        }
+
+        $resizeScript = '<script>(function(){var token=' . json_encode($token, JSON_UNESCAPED_SLASHES) . ';var send=function(){var d=document.documentElement,b=document.body;var h=Math.max(d?d.scrollHeight:0,b?b.scrollHeight:0);parent.postMessage({type:"pcf-ad-height",token:token,height:h},"*");};if(document.readyState==="loading")document.addEventListener("DOMContentLoaded",send,{once:true});else send();window.addEventListener("load",send,{once:true});if("ResizeObserver" in window)new ResizeObserver(send).observe(document.documentElement);}());</script>';
+        $document = '<!doctype html><html lang="ja"><head><meta charset="UTF-8"><meta name="viewport" content="width=device-width,initial-scale=1"><base target="_blank"><style>html,body{margin:0;padding:0;overflow:hidden;text-align:center}img,iframe{max-width:100%}</style></head><body>' . $html . $resizeScript . '</body></html>';
+        ?>
+<iframe
+  class="pcf-deferred-ad"
+  data-pcf-ad-token="<?= htmlspecialchars($token, ENT_QUOTES, 'UTF-8') ?>"
+  title="広告"
+  srcdoc="<?= htmlspecialchars($document, ENT_QUOTES | ENT_SUBSTITUTE, 'UTF-8') ?>"
+  loading="<?= $loading ?>"
+  referrerpolicy="strict-origin-when-cross-origin"
+  sandbox="allow-scripts allow-forms allow-popups allow-popups-to-escape-sandbox allow-top-navigation-by-user-activation"
+  style="display:block;width:100%;height:<?= $height ?>px;border:0;overflow:hidden"
+></iframe>
+        <?php
     }
 }
 

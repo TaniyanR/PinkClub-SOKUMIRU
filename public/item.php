@@ -662,12 +662,6 @@ $productJsonLd = [
     '@type' => 'Product',
     'name' => $title,
     'description' => $pageDescription,
-    'offers' => [
-        '@type' => 'Offer',
-        'url' => $affiliateUrl !== '' ? $affiliateUrl : $canonicalUrl,
-        'priceCurrency' => 'JPY',
-        'availability' => 'https://schema.org/InStock',
-    ],
 ];
 if ($ogImage !== '') {
     $productJsonLd['image'] = $ogImage;

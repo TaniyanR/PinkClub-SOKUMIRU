@@ -13,7 +13,7 @@ if (!headers_sent()) {
 
 $token = trim((string)($_GET['token'] ?? ''));
 $reset = false;
-if (db_table_exists('admin_password_resets')) {
+if (preg_match('/\A[a-f0-9]{64}\z/i', $token) === 1 && db_table_exists('admin_password_resets')) {
     $stmt = db()->prepare('SELECT * FROM admin_password_resets WHERE token_hash=:h AND used_at IS NULL AND expires_at >= NOW() ORDER BY id DESC LIMIT 1');
     $stmt->execute([':h' => hash('sha256', $token)]);
     $reset = $stmt->fetch(PDO::FETCH_ASSOC);

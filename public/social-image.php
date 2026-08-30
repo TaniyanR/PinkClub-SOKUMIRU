@@ -2,6 +2,7 @@
 declare(strict_types=1);
 
 require_once __DIR__ . '/../lib/bootstrap.php';
+require_once __DIR__ . '/../lib/repository.php';
 
 const PCF_SOCIAL_IMAGE_MAX_BYTES = 12582912;
 const PCF_SOCIAL_IMAGE_TTL = 259200;
@@ -263,7 +264,7 @@ function pcf_social_image_fallback(bool $headOnly): never
 $id = filter_input(INPUT_GET, 'id', FILTER_VALIDATE_INT, ['options' => ['min_range' => 1]]);
 if (!is_int($id) || $id <= 0) { http_response_code(404); exit; }
 try {
-    $stmt = db()->prepare('SELECT * FROM items WHERE id = :id LIMIT 1');
+    $stmt = db()->prepare('SELECT * FROM items WHERE id = :id AND ' . items_product_source_where() . ' LIMIT 1');
     $stmt->execute([':id' => $id]);
     $item = $stmt->fetch(PDO::FETCH_ASSOC);
 } catch (Throwable) { $item = false; }

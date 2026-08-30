@@ -3,6 +3,7 @@
 declare(strict_types=1);
 
 require_once __DIR__ . '/_bootstrap.php';
+require_once __DIR__ . '/../lib/repository.php';
 
 header('X-Robots-Tag: noindex, nofollow', true);
 
@@ -13,7 +14,7 @@ if ($itemId <= 0) {
 }
 
 try {
-    $stmt = db()->prepare('SELECT title, affiliate_url, raw_json FROM items WHERE id = :id LIMIT 1');
+    $stmt = db()->prepare('SELECT title, affiliate_url, raw_json FROM items WHERE id = :id AND ' . items_product_source_where() . ' LIMIT 1');
     $stmt->execute([':id' => $itemId]);
     $item = $stmt->fetch(PDO::FETCH_ASSOC);
 } catch (Throwable) {

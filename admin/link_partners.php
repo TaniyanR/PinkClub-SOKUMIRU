@@ -4,6 +4,7 @@ declare(strict_types=1);
 require_once __DIR__ . '/../public/_bootstrap.php';
 require_once __DIR__ . '/../lib/rss_access_trade.php';
 require_once __DIR__ . '/../lib/rss_access_trade_host.php';
+require_once __DIR__ . '/../lib/app_features.php';
 auth_require_admin();
 analytics_ensure_tables();
 $title = '相互リンク管理';
@@ -17,9 +18,8 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
         $url = trim((string)post('url', ''));
         $rssUrl = trim((string)post('rss_url', ''));
         $siteScheme = strtolower((string)parse_url($url, PHP_URL_SCHEME));
-        $rssScheme = $rssUrl !== '' ? strtolower((string)parse_url($rssUrl, PHP_URL_SCHEME)) : '';
         if ($name === '' || filter_var($url, FILTER_VALIDATE_URL) === false || !in_array($siteScheme, ['http','https'], true)
-            || ($rssUrl !== '' && (filter_var($rssUrl, FILTER_VALIDATE_URL) === false || !in_array($rssScheme, ['http','https'], true)))) {
+            || ($rssUrl !== '' && rss_feed_normalize_url($rssUrl) === '')) {
             $message = '公開HTTP(S) URLを入力してください。';
         } else {
             $refCode = 'partner_' . substr(sha1($name . '|' . $url . '|' . microtime(true)), 0, 16);

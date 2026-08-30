@@ -2,6 +2,7 @@
 declare(strict_types=1);
 
 require_once __DIR__ . '/_bootstrap.php';
+require_once __DIR__ . '/../lib/repository.php';
 
 function sample_images_parse_list(?string $value): array
 {
@@ -101,7 +102,7 @@ if ($contentId === '') {
     exit('content_id が指定されていません。');
 }
 
-$stmt = db()->prepare('SELECT content_id, title, raw_json, image_list FROM items WHERE content_id = ? LIMIT 1');
+$stmt = db()->prepare('SELECT content_id, title, raw_json, image_list FROM items WHERE content_id = ? AND ' . items_product_source_where() . ' LIMIT 1');
 $stmt->execute([$contentId]);
 $item = $stmt->fetch(PDO::FETCH_ASSOC);
 if (!$item) {

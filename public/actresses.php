@@ -32,6 +32,8 @@ foreach (($manifest['groups'] ?? []) as $group) {
 ksort($alphaGroups);
 
 $title = '女優一覧';
+$pageDescription = 'SOKUMIRU作品の出演女優を名前から探せる一覧です。';
+$canonicalUrl = public_url('actresses.php');
 require __DIR__ . '/partials/header.php';
 ?>
 <?php pcf_render_hero('女優一覧', '気になる女優のプロフィールと出演作品へ。'); ?>

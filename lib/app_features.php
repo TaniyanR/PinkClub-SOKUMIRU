@@ -109,6 +109,227 @@ function rss_extract_first_image_url(SimpleXMLElement $item): string
     return '';
 }
 
+function rss_feed_public_ip(string $ip): bool
+{
+    return filter_var($ip, FILTER_VALIDATE_IP) !== false
+        && filter_var($ip, FILTER_VALIDATE_IP, FILTER_FLAG_NO_PRIV_RANGE | FILTER_FLAG_NO_RES_RANGE) !== false;
+}
+
+function rss_feed_resolve_public_ips(string $host): array
+{
+    if (filter_var($host, FILTER_VALIDATE_IP) !== false) {
+        return rss_feed_public_ip($host) ? [$host] : [];
+    }
+
+    $ips = [];
+    $records = @dns_get_record($host, DNS_A | DNS_AAAA);
+    if (is_array($records)) {
+        foreach ($records as $record) {
+            $ip = trim((string)($record['ip'] ?? $record['ipv6'] ?? ''));
+            if ($ip === '') {
+                continue;
+            }
+            // A hostname that also resolves to an internal address is unsafe.
+            if (!rss_feed_public_ip($ip)) {
+                return [];
+            }
+            $ips[$ip] = true;
+        }
+    }
+
+    if ($ips === []) {
+        foreach ((array)@gethostbynamel($host) as $ip) {
+            $ip = trim((string)$ip);
+            if ($ip === '' || !rss_feed_public_ip($ip)) {
+                return [];
+            }
+            $ips[$ip] = true;
+        }
+    }
+
+    return array_keys($ips);
+}
+
+function rss_feed_normalize_url(string $value): string
+{
+    $url = trim($value);
+    if ($url === '' || str_contains($url, "\r") || str_contains($url, "\n") || filter_var($url, FILTER_VALIDATE_URL) === false) {
+        return '';
+    }
+
+    $parts = parse_url($url);
+    if (!is_array($parts)) {
+        return '';
+    }
+    $scheme = strtolower((string)($parts['scheme'] ?? ''));
+    $host = strtolower(rtrim((string)($parts['host'] ?? ''), '.'));
+    $port = isset($parts['port']) ? (int)$parts['port'] : ($scheme === 'https' ? 443 : 80);
+    if (!in_array($scheme, ['http', 'https'], true)
+        || $host === ''
+        || $host === 'localhost'
+        || str_ends_with($host, '.localhost')
+        || str_ends_with($host, '.local')
+        || !in_array($port, [80, 443], true)
+        || isset($parts['user'])
+        || isset($parts['pass'])
+        || rss_feed_resolve_public_ips($host) === []) {
+        return '';
+    }
+
+    return $url;
+}
+
+function rss_feed_redirect_url(string $currentUrl, string $location): string
+{
+    $location = trim($location);
+    if ($location === '') {
+        return '';
+    }
+    if (str_starts_with($location, '//')) {
+        return rss_feed_normalize_url((string)parse_url($currentUrl, PHP_URL_SCHEME) . ':' . $location);
+    }
+    if (preg_match('#^https?://#i', $location) === 1) {
+        return rss_feed_normalize_url($location);
+    }
+
+    $parts = parse_url($currentUrl);
+    if (!is_array($parts) || empty($parts['host'])) {
+        return '';
+    }
+    $scheme = strtolower((string)($parts['scheme'] ?? 'https'));
+    $host = (string)$parts['host'];
+    $port = isset($parts['port']) ? ':' . (int)$parts['port'] : '';
+    $origin = $scheme . '://' . $host . $port;
+    if (str_starts_with($location, '/')) {
+        return rss_feed_normalize_url($origin . $location);
+    }
+    if (str_starts_with($location, '?')) {
+        return rss_feed_normalize_url($origin . (string)($parts['path'] ?? '/') . $location);
+    }
+
+    $directory = rtrim(str_replace('\\', '/', dirname((string)($parts['path'] ?? '/'))), '/');
+    if ($directory === '.' || $directory === '/') {
+        $directory = '';
+    }
+    $segments = [];
+    foreach (explode('/', $directory . '/' . $location) as $segment) {
+        if ($segment === '' || $segment === '.') {
+            continue;
+        }
+        if ($segment === '..') {
+            array_pop($segments);
+            continue;
+        }
+        $segments[] = $segment;
+    }
+    return rss_feed_normalize_url($origin . '/' . implode('/', $segments));
+}
+
+function rss_feed_fetch_once(string $url, int $timeoutSec): ?array
+{
+    if (!function_exists('curl_init')) {
+        return null;
+    }
+    $parts = parse_url($url);
+    if (!is_array($parts)) {
+        return null;
+    }
+    $scheme = strtolower((string)($parts['scheme'] ?? ''));
+    $host = strtolower((string)($parts['host'] ?? ''));
+    $port = isset($parts['port']) ? (int)$parts['port'] : ($scheme === 'https' ? 443 : 80);
+    $ips = rss_feed_resolve_public_ips($host);
+    if ($host === '' || $ips === []) {
+        return null;
+    }
+
+    foreach ($ips as $ip) {
+        $body = '';
+        $location = '';
+        $tooLarge = false;
+        $ch = curl_init($url);
+        if ($ch === false) {
+            continue;
+        }
+        $resolveIp = str_contains($ip, ':') ? '[' . $ip . ']' : $ip;
+        $options = [
+            CURLOPT_RETURNTRANSFER => false,
+            CURLOPT_FOLLOWLOCATION => false,
+            CURLOPT_CONNECTTIMEOUT => min(5, $timeoutSec),
+            CURLOPT_TIMEOUT => $timeoutSec,
+            CURLOPT_USERAGENT => 'PinkClubRSS/1.1',
+            CURLOPT_HTTPHEADER => ['Accept: application/rss+xml, application/atom+xml, application/xml, text/xml;q=0.9, */*;q=0.5'],
+            CURLOPT_ACCEPT_ENCODING => '',
+            CURLOPT_SSL_VERIFYPEER => true,
+            CURLOPT_SSL_VERIFYHOST => 2,
+            CURLOPT_PROXY => '',
+            CURLOPT_RESOLVE => [$host . ':' . $port . ':' . $resolveIp],
+            CURLOPT_HEADERFUNCTION => static function ($curl, string $header) use (&$location): int {
+                if (stripos($header, 'Location:') === 0) {
+                    $location = trim(substr($header, 9));
+                }
+                return strlen($header);
+            },
+            CURLOPT_WRITEFUNCTION => static function ($curl, string $chunk) use (&$body, &$tooLarge): int {
+                if (strlen($body) + strlen($chunk) > 2097152) {
+                    $tooLarge = true;
+                    return 0;
+                }
+                $body .= $chunk;
+                return strlen($chunk);
+            },
+        ];
+        if (defined('CURLOPT_PROTOCOLS') && defined('CURLPROTO_HTTP') && defined('CURLPROTO_HTTPS')) {
+            $options[CURLOPT_PROTOCOLS] = CURLPROTO_HTTP | CURLPROTO_HTTPS;
+        }
+        curl_setopt_array($ch, $options);
+        $ok = curl_exec($ch);
+        $status = (int)curl_getinfo($ch, CURLINFO_RESPONSE_CODE);
+        curl_close($ch);
+        if ($ok === false || $tooLarge) {
+            continue;
+        }
+        if ($status >= 300 && $status < 400 && $location !== '') {
+            return ['redirect' => $location];
+        }
+        if ($status >= 200 && $status < 300 && $body !== '') {
+            return ['body' => $body];
+        }
+    }
+
+    return null;
+}
+
+function rss_feed_fetch(string $url, int $timeoutSec): ?string
+{
+    $current = rss_feed_normalize_url($url);
+    if ($current === '') {
+        return null;
+    }
+    $timeoutSec = max(1, min(10, $timeoutSec));
+    $seen = [];
+    for ($hop = 0; $hop <= 3; $hop++) {
+        if (isset($seen[$current])) {
+            return null;
+        }
+        $seen[$current] = true;
+        $result = rss_feed_fetch_once($current, $timeoutSec);
+        if (!is_array($result)) {
+            return null;
+        }
+        if (isset($result['body'])) {
+            return (string)$result['body'];
+        }
+        if ($hop === 3) {
+            return null;
+        }
+        $current = rss_feed_redirect_url($current, (string)($result['redirect'] ?? ''));
+        if ($current === '') {
+            return null;
+        }
+    }
+    return null;
+}
+
 function rss_fetch_source(int $sourceId, int $timeoutSec = 4): array
 {
     $pdo = db();
@@ -119,13 +340,14 @@ function rss_fetch_source(int $sourceId, int $timeoutSec = 4): array
         return ['ok' => false, 'message' => 'source not found'];
     }
 
-    $ctx = stream_context_create(['http' => ['timeout' => $timeoutSec, 'user_agent' => 'PinkClubRSS/1.0']]);
-    $xmlRaw = @file_get_contents((string)$source['feed_url'], false, $ctx);
+    $xmlRaw = rss_feed_fetch((string)$source['feed_url'], $timeoutSec);
     if (!is_string($xmlRaw) || $xmlRaw === '') {
         return ['ok' => false, 'message' => 'fetch failed'];
     }
-    libxml_use_internal_errors(true);
-    $xml = simplexml_load_string($xmlRaw);
+    $previousLibxmlState = libxml_use_internal_errors(true);
+    $xml = simplexml_load_string($xmlRaw, SimpleXMLElement::class, LIBXML_NONET | LIBXML_NOCDATA);
+    libxml_clear_errors();
+    libxml_use_internal_errors($previousLibxmlState);
     if ($xml === false) {
         return ['ok' => false, 'message' => 'xml parse failed'];
     }

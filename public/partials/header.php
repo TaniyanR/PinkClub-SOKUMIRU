@@ -229,7 +229,7 @@ $relNextHref = isset($relNext) && is_string($relNext) && $relNext !== '' ? $relN
     </div>
     <div class="header-right site-header__right">
       <?php if ($headerAdHtml !== '') : ?>
-        <div class="site-ad"><?= $headerAdHtml ?></div>
+        <div class="site-ad"><?php render_deferred_ad_html($headerAdHtml, 'header_custom'); ?></div>
       <?php elseif ($canRenderAd && (!function_exists('should_show_ad') || should_show_ad('header_left_728x90', $pageType, 'pc'))) : ?>
         <div class="site-ad"><?php render_ad('header_left_728x90', $pageType, 'pc'); ?></div>
       <?php endif; ?>
