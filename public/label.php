@@ -90,45 +90,31 @@ require __DIR__ . '/partials/header.php';
   <?php pcf_render_empty('このレーベルの商品はありません。'); ?>
 <?php endif; ?>
 
-<section id="access-ranking" class="block" style="margin-top:24px;">
-  <h2 class="section-title">人気のレーベルランキング！</h2>
-  <div style="display:flex; gap:8px; flex-wrap:wrap; margin-bottom:8px;">
-    <?php foreach ($accessRankingTabs as $tabKey => $tabConfig): ?>
-      <?php $tabUrl = public_url('label.php') . '?' . http_build_query(['id' => (string)($label['id'] ?? $id), 'name' => $labelName, 'rank_period' => (string)$tabKey]) . '#access-ranking'; ?>
-      <?php $tabStyle = $accessRankingPeriod === $tabKey ? 'display:inline-block; padding:6px 12px; border:1px solid #0b5ed7; border-radius:6px; background:#0b5ed7; color:#fff; font-weight:700; text-decoration:none;' : 'display:inline-block; padding:6px 12px; border:1px solid #0b5ed7; border-radius:6px; background:#fff; color:#0b5ed7; font-weight:700; text-decoration:none;'; ?>
-      <a href="<?= e($tabUrl) ?>" rel="nofollow" style="<?= e($tabStyle) ?>"><?= e((string)$tabConfig['label']) ?></a>
-    <?php endforeach; ?>
-  </div>
-  <?php if ($accessRankingRows !== []): ?>
-    <div style="max-height:800px; overflow-y:auto; border:1px solid #ddd;">
-      <table style="width:100%; border-collapse:collapse; table-layout:fixed;">
-        <thead>
-          <tr>
-            <th style="width:80px; text-align:center; padding:8px; border-bottom:1px solid #ddd; background:#0b5ed7; color:#fff;">順位</th>
-            <th style="width:auto; text-align:center; padding:8px; border-bottom:1px solid #ddd; background:#0b5ed7; color:#fff;">レーベル名</th>
-            <th style="width:120px; text-align:center; padding:8px; border-bottom:1px solid #ddd; background:#0b5ed7; color:#fff;">ランキング点</th>
-          </tr>
-        </thead>
-        <tbody>
-          <?php foreach ($accessRankingRows as $index => $rankingRow): ?>
-            <tr>
-              <td style="padding:8px; border-bottom:1px solid #eee; text-align:center;"><?= e((string)($index + 1)) ?></td>
-              <td style="padding:8px; border-bottom:1px solid #eee; text-align:left;">
-                <?php
-                $rankingLabelUrl = public_url('label.php') . '?' . http_build_query(['id' => (string)($rankingRow['id'] ?? ''), 'name' => (string)($rankingRow['name'] ?? '')]);
-                ?>
-                <a href="<?= e($rankingLabelUrl) ?>"><?= e((string)($rankingRow['name'] ?? '')) ?></a>
-              </td>
-              <td style="padding:8px; border-bottom:1px solid #eee; text-align:center;"><?= e((string)((int)($rankingRow['access_count'] ?? 0))) ?></td>
-            </tr>
-          <?php endforeach; ?>
-        </tbody>
-      </table>
-    </div>
-  <?php else: ?>
-    <?php pcf_render_empty('レーベルクリックランキングのデータがありません。'); ?>
-  <?php endif; ?>
-</section>
+<?php pcf_render_item_access_ranking(
+    $accessRankingTabs,
+    $accessRankingPeriod,
+    static function (string $period) use ($label, $id, $labelName): string {
+        return public_url('label.php') . '?' . http_build_query([
+            'id' => (string)($label['id'] ?? $id),
+            'name' => $labelName,
+            'rank_period' => $period,
+        ]) . '#access-ranking';
+    },
+    $accessRankingRows,
+    static function (array $rankingRow): string {
+        $rankingName = trim((string)($rankingRow['name'] ?? ''));
+        $rankingId = trim((string)($rankingRow['id'] ?? ''));
+        if ($rankingName === '' || $rankingId === '') {
+            return '';
+        }
+        return public_url('label.php') . '?' . http_build_query([
+            'id' => $rankingId,
+            'name' => $rankingName,
+        ]);
+    },
+    '人気のレーベルランキングのデータがありません。',
+    '人気のレーベルランキング'
+); ?>
 
 
 <?php pcf_render_sample_movie_modal(); ?>
