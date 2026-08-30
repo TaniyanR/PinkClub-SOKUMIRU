@@ -83,7 +83,10 @@ class SokumiruSyncService
         $hits = min(100, max(1, (int)($params['hits'] ?? 100)));
         $offset = $this->normalizeItemListOffset((int)($params['offset'] ?? 1));
         $response = $this->client->fetchItems($siteCode, $serviceCode, $floorCode, ['hits' => $hits, 'offset' => $offset]);
-        $items = SokumiruNormalizer::normalizeItemsResponse($response);
+        $items = array_values(array_filter(
+            SokumiruNormalizer::normalizeItemsResponse($response),
+            fn(array $item): bool => $this->isCatalogProduct($item)
+        ));
         return $this->saveItems($items, 'items');
     }
 
@@ -140,8 +143,8 @@ class SokumiruSyncService
             }, $fetchedItems));
             foreach ($fetchedItems as $item) {
                 $processedCount++;
-                $excluded = false;
-                if ($excludeKeywords !== []) {
+                $excluded = !$this->isCatalogProduct($item);
+                if (!$excluded && $excludeKeywords !== []) {
                     $title = (string)($item['title'] ?? '');
                     foreach ($excludeKeywords as $keyword) {
                         $keyword = trim((string)$keyword);
@@ -382,6 +385,26 @@ class SokumiruSyncService
                     ->execute([$dmmId, $name]);
             }
         }
+    }
+
+    private function isCatalogProduct(array $item): bool
+    {
+        if (trim((string)($item['content_id'] ?? '')) === '' || trim((string)($item['title'] ?? '')) === '') {
+            return false;
+        }
+
+        foreach (['url', 'affiliate_url'] as $urlKey) {
+            $url = trim((string)($item[$urlKey] ?? ''));
+            if ($url === '') {
+                continue;
+            }
+            $path = strtolower((string)(parse_url($url, PHP_URL_PATH) ?? ''));
+            if ($path === '/limited_item' || str_contains($path, '/limited_item/')) {
+                return false;
+            }
+        }
+
+        return true;
     }
 
     public function logSync(string $type, int $isSuccess, int $count, string $message): void
