@@ -67,13 +67,25 @@ function pcf_public_directory_cache_rebuild(string $kind): ?array
 
     try {
         $table = $config['table'];
-        if (in_array($kind, ['genres', 'makers'], true)) {
-            $relation = $kind === 'genres' ? 'item_genres' : 'item_makers';
+        if (in_array($kind, ['genres', 'makers', 'series'], true)) {
+            $relation = match ($kind) {
+                'genres' => 'item_genres',
+                'makers' => 'item_makers',
+                default => 'item_series',
+            };
+            $redirectWhere = '';
+            if ($kind === 'series') {
+                $redirectSeriesIds = array_keys(series_canonical_maker_redirects());
+                if ($redirectSeriesIds !== []) {
+                    $redirectWhere = ' AND ' . $table . '.id NOT IN (' . implode(',', array_map('intval', $redirectSeriesIds)) . ')';
+                }
+            }
             $stmt = db()->query(
                 "SELECT {$table}.id, {$table}.dmm_id, {$table}.name
                  FROM {$table}
                  WHERE {$table}.name IS NOT NULL
                    AND {$table}.name <> ''
+                   {$redirectWhere}
                    AND EXISTS (
                      SELECT 1
                      FROM {$relation}
@@ -181,7 +193,7 @@ function pcf_public_directory_cache_read(string $cacheFile): ?array
 
 function pcf_public_directory_cache_file(string $kind): string
 {
-    $suffix = in_array($kind, ['genres', 'makers'], true) ? '-public-v2' : '';
+    $suffix = in_array($kind, ['genres', 'makers', 'series'], true) ? '-public-v2' : '';
     return dirname(__DIR__) . '/storage/cache/public-directories/' . $kind . $suffix . '.json';
 }
 
@@ -190,6 +202,7 @@ function pcf_public_directory_cache_config(string $kind): ?array
     return match ($kind) {
         'genres' => ['table' => 'genres'],
         'makers' => ['table' => 'makers'],
+        'series' => ['table' => 'series_master'],
         default => null,
     };
 }

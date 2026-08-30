@@ -1,4 +1,5 @@
 ErrorDocument 404 /404.php
+Options -Indexes
 RewriteEngine On
 RewriteCond %{HTTPS} !=on
 RewriteRule ^(?:index\.(?:php|com))?$ https://%{HTTP_HOST}/ [R=301,L]
@@ -14,3 +15,13 @@ RewriteCond %{REQUEST_FILENAME} -f [OR]
 RewriteCond %{REQUEST_FILENAME} -d
 RewriteRule ^ - [L]
 RewriteRule ^(.*)$ public/$1 [L]
+
+<IfModule mod_deflate.c>
+  AddOutputFilterByType DEFLATE text/html text/plain text/css text/javascript application/javascript application/json application/xml image/svg+xml
+</IfModule>
+
+<IfModule mod_headers.c>
+  <FilesMatch "\.(?:css|js|png|jpe?g|gif|webp|avif|svg|ico|woff2?)$">
+    Header set Cache-Control "public, max-age=604800"
+  </FilesMatch>
+</IfModule>

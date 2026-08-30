@@ -4,8 +4,6 @@ declare(strict_types=1);
 
 require_once __DIR__ . '/_bootstrap.php';
 
-$siteTitle = APP_NAME;
-
 $articleId = filter_input(INPUT_GET, 'id', FILTER_VALIDATE_INT);
 
 $pdo = db();
@@ -17,7 +15,9 @@ if (!$article) {
     require __DIR__ . '/404.php';
 }
 
-$pageTitle = $siteTitle . ' | ' . $article['title'];
+$pageTitle = (string)$article['title'];
+$pageDescription = mb_strimwidth(trim((string)($article['description'] ?? '')), 0, 150, '…', 'UTF-8');
+$canonicalUrl = public_url('article.php?id=' . (int)$article['id']);
 
 require __DIR__ . '/partials/header.php';
 ?>
@@ -33,7 +33,9 @@ require __DIR__ . '/partials/header.php';
         <?php if (!empty($article['price'])): ?>
             <p>価格: <?php echo e((string) $article['price']); ?>円</p>
         <?php endif; ?>
-        <p><a href="<?php echo e($article['affiliate_url']); ?>" target="_blank" rel="noopener">SOKUMIRU商品ページへ</a></p>
+        <?php if (!empty($article['affiliate_url'])): ?>
+            <p><a href="<?php echo e((string)$article['affiliate_url']); ?>" target="_blank" rel="sponsored nofollow noopener noreferrer">SOKUMIRU商品ページへ</a></p>
+        <?php endif; ?>
 </article>
 <?php
 require __DIR__ . '/partials/footer.php';

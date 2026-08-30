@@ -38,6 +38,8 @@ $sql = 'SELECT * FROM mutual_links WHERE ' . implode(' AND ', $where) . ' ORDER 
 $rows = db()->query($sql)->fetchAll(PDO::FETCH_ASSOC);
 
 $pageTitle = 'リンク集';
+$pageDescription = '当サイトの相互リンク一覧です。';
+$canonicalUrl = public_url('links.php');
 include __DIR__ . '/partials/header.php';
 ?>
 <section class="block"><h1 class="section-title">リンク集</h1>

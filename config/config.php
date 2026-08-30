@@ -17,7 +17,7 @@ function detect_base_path(string $scriptName): string
 {
     $normalized = str_replace('\\', '/', $scriptName);
     if ($normalized === '' || $normalized === '/') return '';
-    foreach (['#/(?:public|admin)(?:/.*)?$#i','#/index\.php(?:/.*)?$#i','#/[^/]+\.php(?:/.*)?$#i'] as $pattern) {
+    foreach (['#/robots\.txt$#i','#/(?:public|admin)(?:/.*)?$#i','#/index\.php(?:/.*)?$#i','#/[^/]+\.php(?:/.*)?$#i'] as $pattern) {
         $candidate = preg_replace($pattern, '', $normalized);
         if (is_string($candidate) && $candidate !== $normalized) { $normalized = $candidate; break; }
     }
@@ -30,7 +30,7 @@ function detect_base_path_from_request_uri(string $requestUri): string
     $path = (string) parse_url($requestUri, PHP_URL_PATH);
     if ($path === '' || $path === '/') return '';
     $normalized = str_replace('\\', '/', $path);
-    foreach (['#/(?:public|admin)(?:/.*)?$#i','#/index\.php(?:/.*)?$#i','#/[^/]+\.php(?:/.*)?$#i'] as $pattern) {
+    foreach (['#/robots\.txt$#i','#/(?:public|admin)(?:/.*)?$#i','#/index\.php(?:/.*)?$#i','#/[^/]+\.php(?:/.*)?$#i'] as $pattern) {
         $candidate = preg_replace($pattern, '', $normalized);
         if (is_string($candidate) && $candidate !== $normalized) { $normalized = $candidate; break; }
     }
@@ -51,7 +51,9 @@ function apply_detected_path_to_base_url(string $configuredUrl, string $detected
 
 $scriptName = str_replace('\\', '/', (string) ($_SERVER['SCRIPT_NAME'] ?? '/'));
 $basePath = detect_base_path($scriptName);
-if ($basePath === '') $basePath = detect_base_path_from_request_uri((string) ($_SERVER['REQUEST_URI'] ?? ''));
+if ($basePath === '' && ($scriptName === '' || $scriptName === '/')) {
+    $basePath = detect_base_path_from_request_uri((string) ($_SERVER['REQUEST_URI'] ?? ''));
+}
 
 if ($configuredBaseUrl !== '') {
     $baseUrl = apply_detected_path_to_base_url(normalize_configured_base_url($configuredBaseUrl), $basePath);

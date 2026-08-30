@@ -72,6 +72,8 @@ $oldestItem = pcf_pick_oldest_item($list);
 $oldestImage = pcf_item_image(is_array($oldestItem) ? $oldestItem : []);
 
 $title = (string)($row['name'] ?? '作者詳細');
+$pageDescription = mb_strimwidth($title . 'の関連作品一覧です。', 0, 150, '…', 'UTF-8');
+$canonicalUrl = public_url('author.php?id=' . $id);
 require __DIR__ . '/partials/header.php';
 ?>
 <?php pcf_render_breadcrumbs([

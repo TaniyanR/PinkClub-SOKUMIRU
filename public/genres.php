@@ -95,6 +95,8 @@ unset($groupRows);
 $sortByName($otherRows);
 
 $title = 'ジャンル一覧';
+$pageDescription = 'SOKUMIRU作品をジャンルから探せる一覧です。';
+$canonicalUrl = public_url('genres.php');
 require __DIR__ . '/partials/header.php';
 ?>
 <?php pcf_render_hero('ジャンル一覧'); ?>

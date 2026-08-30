@@ -990,9 +990,7 @@ function fetch_taxonomy_by_id(string $table, string $idField, int $id): ?array
     $idField = normalize_order($idField, ['id'], 'id');
     $id      = max(1, $id);
 
-    $stmt = db()->prepare("SELECT * FROM {
-        $table} WHERE {
-        $idField} = :id LIMIT 1");
+    $stmt = db()->prepare("SELECT * FROM {$table} WHERE {$idField} = :id LIMIT 1");
     $stmt->execute([':id' => $id]);
     $data = $stmt->fetch();
     return $data ?: null;

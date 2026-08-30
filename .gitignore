@@ -1,9 +1,16 @@
 # Local config (secrets)
 /cache/
+/storage/
 /logs/
 /logs/*.log
 .DS_Store
 Thumbs.db
+.idea/
+.vscode/
+*.bak
+*.old
+*.orig
+*.tmp
 vendor/
 
 !public/assets/vendor/

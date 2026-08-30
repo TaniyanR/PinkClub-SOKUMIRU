@@ -95,6 +95,8 @@ unset($groupRows);
 $sortByName($otherRows);
 
 $title = 'メーカー一覧';
+$pageDescription = 'SOKUMIRU作品をメーカーから探せる一覧です。';
+$canonicalUrl = public_url('makers.php');
 require __DIR__ . '/partials/header.php';
 ?>
 <?php pcf_render_hero('メーカー一覧'); ?>

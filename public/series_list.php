@@ -4,24 +4,11 @@ declare(strict_types=1);
 
 require_once __DIR__ . '/_bootstrap.php';
 require_once __DIR__ . '/../lib/repository.php';
+require_once __DIR__ . '/../lib/public_directory_cache.php';
 require_once __DIR__ . '/partials/public_ui.php';
 
-$rows = [];
+$rows = pcf_public_directory_cache_rows('series');
 $displayRows = [];
-try {
-    for ($seriesOffset = 0; ; $seriesOffset += 200) {
-        $seriesPageRows = fetch_series(200, $seriesOffset, 'name');
-        if ($seriesPageRows === []) {
-            break;
-        }
-        $rows = array_merge($rows, $seriesPageRows);
-        if (count($seriesPageRows) < 200) {
-            break;
-        }
-    }
-} catch (Throwable) {
-    $rows = [];
-}
 
 foreach ($rows as $r) {
     if (!is_array($r)) {
@@ -90,6 +77,8 @@ foreach ($alphaGroups as &$groupRows) {
 unset($groupRows);
 
 $title = 'シリーズ一覧';
+$pageDescription = 'SOKUMIRU作品をシリーズから探せる一覧です。';
+$canonicalUrl = public_url('series_list.php');
 require __DIR__ . '/partials/header.php';
 ?>
 <?php pcf_render_hero('シリーズ一覧'); ?>
