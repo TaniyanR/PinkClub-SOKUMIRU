@@ -268,6 +268,11 @@ function index_items_product_source_where(PDO $pdo): string
     if (index_column_exists($pdo, 'items', 'item_source')) {
         $parts[] = 'items.item_source = "sokumiru_product"';
     }
+    // Keep the standalone item-list query aligned with the shared public filter.
+    // Existing campaign rows may remain in the database, but must never be
+    // counted or rendered as playable catalog products.
+    $parts[] = 'COALESCE(items.url, "") NOT LIKE "%/limited_item/%"';
+    $parts[] = 'COALESCE(items.affiliate_url, "") NOT LIKE "%/limited_item/%"';
     $parts[] = index_items_front_release_where();
     if (index_table_exists($pdo, 'rss_items') && index_table_exists($pdo, 'rss_sources') && index_column_exists($pdo, 'rss_sources', 'source_type')) {
         $parts[] = 'NOT EXISTS (SELECT 1 FROM rss_items ri INNER JOIN rss_sources rs ON rs.id = ri.source_id WHERE rs.source_type = "partner_link" AND (ri.title = items.title OR ri.url = items.url OR ri.url = items.affiliate_url))';
