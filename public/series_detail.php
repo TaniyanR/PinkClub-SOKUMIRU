@@ -109,41 +109,25 @@ require __DIR__ . '/partials/header.php';
   <?php pcf_render_empty('このシリーズの作品はまだありません。'); ?>
 <?php endif; ?>
 
-<section id="access-ranking" class="block" style="margin-top:24px;">
-  <h2 class="section-title">人気のシリーズランキング！</h2>
-  <div style="display:flex; gap:8px; flex-wrap:wrap; margin-bottom:8px;">
-    <?php foreach ($accessRankingTabs as $tabKey => $tabConfig): ?>
-      <?php $tabUrl = public_url('series_detail.php') . '?' . http_build_query(['id' => (int)$series['id'], 'rank_period' => (string)$tabKey]) . '#access-ranking'; ?>
-      <?php $tabStyle = $accessRankingPeriod === $tabKey ? 'display:inline-block; padding:6px 12px; border:1px solid #0b5ed7; border-radius:6px; background:#0b5ed7; color:#fff; font-weight:700; text-decoration:none;' : 'display:inline-block; padding:6px 12px; border:1px solid #0b5ed7; border-radius:6px; background:#fff; color:#0b5ed7; font-weight:700; text-decoration:none;'; ?>
-      <a href="<?= e($tabUrl) ?>" rel="nofollow" style="<?= e($tabStyle) ?>"><?= e((string)$tabConfig['label']) ?></a>
-    <?php endforeach; ?>
-  </div>
-  <?php if ($accessRankingRows !== []): ?>
-    <div style="max-height:800px; overflow-y:auto; border:1px solid #ddd;">
-      <table style="width:100%; border-collapse:collapse; table-layout:fixed;">
-        <thead>
-          <tr>
-            <th style="width:80px; text-align:center; padding:8px; border-bottom:1px solid #ddd; background:#0b5ed7; color:#fff;">順位</th>
-            <th style="width:auto; text-align:center; padding:8px; border-bottom:1px solid #ddd; background:#0b5ed7; color:#fff;">シリーズ名</th>
-            <th style="width:120px; text-align:center; padding:8px; border-bottom:1px solid #ddd; background:#0b5ed7; color:#fff;">ランキング点</th>
-          </tr>
-        </thead>
-        <tbody>
-          <?php foreach ($accessRankingRows as $accessIndex => $accessRow): ?>
-            <?php $seriesUrl = public_url('series_detail.php') . '?id=' . rawurlencode((string)($accessRow['id'] ?? '')); ?>
-            <tr>
-              <td style="text-align:center; padding:8px; border-bottom:1px solid #eee; font-weight:700;"><?= e((string)($accessIndex + 1)) ?></td>
-              <td style="padding:8px; border-bottom:1px solid #eee; overflow:hidden; text-overflow:ellipsis; white-space:nowrap;"><a href="<?= e($seriesUrl) ?>"><?= e((string)($accessRow['name'] ?? '')) ?></a></td>
-              <td style="text-align:center; padding:8px; border-bottom:1px solid #eee;"><?= e((string)((int)($accessRow['access_count'] ?? 0))) ?></td>
-            </tr>
-          <?php endforeach; ?>
-        </tbody>
-      </table>
-    </div>
-  <?php else: ?>
-    <?php pcf_render_empty('シリーズクリックランキングのデータがありません。'); ?>
-  <?php endif; ?>
-</section>
+<?php pcf_render_item_access_ranking(
+    $accessRankingTabs,
+    $accessRankingPeriod,
+    static function (string $period) use ($series): string {
+        return public_url('series_detail.php') . '?' . http_build_query([
+            'id' => (int)$series['id'],
+            'rank_period' => $period,
+        ]) . '#access-ranking';
+    },
+    $accessRankingRows,
+    static function (array $rankingRow): string {
+        $rankingId = (int)($rankingRow['id'] ?? 0);
+        return $rankingId > 0
+            ? public_url('series_detail.php') . '?id=' . rawurlencode((string)$rankingId)
+            : '';
+    },
+    '人気のシリーズランキングのデータがありません。',
+    '人気のシリーズランキング'
+); ?>
 
 <?php pcf_render_sample_movie_modal(); ?>
 <?php require __DIR__ . '/partials/footer.php'; ?>
