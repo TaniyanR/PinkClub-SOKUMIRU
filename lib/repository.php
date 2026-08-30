@@ -206,6 +206,10 @@ function items_product_source_where(string $alias = ''): string
         $where[] = $outerPrefix . '.item_source = "sokumiru_product"';
     }
 
+    // SOKUMIRU sometimes returns campaign landing pages in the item feed.
+    // They are not playable catalog products and must never appear as items.
+    $where[] = 'COALESCE(' . $outerPrefix . '.url, "") NOT LIKE "%/limited_item/%"';
+    $where[] = 'COALESCE(' . $outerPrefix . '.affiliate_url, "") NOT LIKE "%/limited_item/%"';
     $where[] = items_front_release_where($outerPrefix);
     if (items_table_exists('rss_items') && items_table_exists('rss_sources') && items_column_exists('source_type', 'rss_sources')) {
         $where[] = 'NOT EXISTS (SELECT 1 FROM rss_items ri INNER JOIN rss_sources rs ON rs.id = ri.source_id WHERE rs.source_type = "partner_link" AND (ri.title = ' . $outerPrefix . '.title OR ri.url = ' . $outerPrefix . '.url OR ri.url = ' . $outerPrefix . '.affiliate_url))';
