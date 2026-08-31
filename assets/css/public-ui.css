@@ -756,7 +756,11 @@
   .site-main--legacy .rail-row--home-taxonomy .rail-card .rail-card__noimage {
     height: 210px !important;
   }
-  .site-main--legacy .only-sp .rail-row--no-scroll .rail-card .thumb {
+  .site-main--legacy .only-sp .rail-row--no-scroll .rail-card--product .rail-card__image-link {
+    aspect-ratio: auto;
+  }
+  .site-main--legacy .only-sp .rail-row--no-scroll .rail-card .thumb,
+  .site-main--legacy .only-sp .rail-row--no-scroll .rail-card .rail-card__noimage {
     height: 210px !important;
     object-fit: contain;
     object-position: center top;

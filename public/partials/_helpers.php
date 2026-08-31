@@ -20,7 +20,18 @@ if (!function_exists('render_ad')) {
     function render_ad(string $position_key, string $page_type = 'home', string $device = 'pc'): void
     {
         $html = get_ad_code($position_key);
-        if ($html !== null) render_deferred_ad_html($html, $position_key);
+        if ($html === null) {
+            return;
+        }
+
+        // These configured mobile providers render their banner in the parent document.
+        // A sandboxed srcdoc isolates the provider script and leaves the visible slot empty.
+        if (in_array($position_key, ['sp_header_below', 'sp_footer_above'], true)) {
+            echo $html;
+            return;
+        }
+
+        render_deferred_ad_html($html, $position_key);
     }
 }
 
