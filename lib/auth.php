@@ -18,6 +18,19 @@ function auth_last_error(): ?string
     return is_string($error) ? $error : null;
 }
 
+/**
+ * The PinkClub series uses admin / password only for the unfinished initial
+ * account.  A previous installer release stored a one-time random password,
+ * so keep a narrowly-scoped compatibility path for those installations.
+ */
+function auth_matches_initial_credentials(array $user, string $username, string $password): bool
+{
+    return !(bool)($user['initial_setup_completed'] ?? true)
+        && hash_equals('admin', trim($username))
+        && hash_equals('admin', (string)($user['username'] ?? ''))
+        && hash_equals('password', $password);
+}
+
 function auth_attempt(string $username, string $password): bool
 {
     if (function_exists('pcf_session_start')) {
@@ -37,7 +50,37 @@ function auth_attempt(string $username, string $password): bool
         return false;
     }
 
-    if (!$user || !password_verify($password, (string)$user['password_hash'])) {
+    if (!$user) {
+        return false;
+    }
+
+    $passwordMatches = password_verify($password, (string)$user['password_hash']);
+    if (!$passwordMatches && auth_matches_initial_credentials($user, $username, $password)) {
+        try {
+            $restore = db()->prepare(
+                "UPDATE admins
+                 SET password_hash=:password_hash, session_version=session_version+1, updated_at=NOW()
+                 WHERE id=:id AND username='admin' AND initial_setup_completed=0"
+            );
+            $restore->execute([
+                ':password_hash' => password_hash('password', PASSWORD_DEFAULT),
+                ':id' => (int)$user['id'],
+            ]);
+            if ($restore->rowCount() !== 1) {
+                return false;
+            }
+            $user['session_version'] = (int)$user['session_version'] + 1;
+            $passwordMatches = true;
+        } catch (PDOException|RuntimeException $exception) {
+            auth_set_last_error('db_error');
+            if (function_exists('installer_log')) {
+                installer_log('auth initial credential restore db error: ' . $exception->getMessage());
+            }
+            return false;
+        }
+    }
+
+    if (!$passwordMatches) {
         return false;
     }
 
