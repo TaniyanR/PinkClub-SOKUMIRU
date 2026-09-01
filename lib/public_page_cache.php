@@ -102,7 +102,8 @@ function pcf_public_page_cache_start(int $ttlSeconds = 120): void
     if ($normalizedQuery !== '') {
         $normalizedRequestUri .= '?' . $normalizedQuery;
     }
-    $cacheKey = hash('sha256', 'v2|' . $host . '|' . $variant . '|' . $normalizedRequestUri);
+    $cacheGeneration = $scriptName === 'item.php' ? 'v3-social-card' : 'v2';
+    $cacheKey = hash('sha256', $cacheGeneration . '|' . $host . '|' . $variant . '|' . $normalizedRequestUri);
     $cacheFile = $cacheDirectory . '/' . $cacheKey . '.html';
     // Sixteen lock shards prevent a cache stampede without creating one lock file per URL.
     $cacheLockFile = $cacheDirectory . '/.regenerate-' . substr($cacheKey, 0, 1) . '.lock';
