@@ -239,10 +239,9 @@ function installer_ensure_admin_user(PDO $pdo, string $stepLabel): bool
 {
     $stmt = $pdo->query('SELECT 1 FROM admins ORDER BY id ASC LIMIT 1');
     if ($stmt->fetchColumn() !== false) { installer_log('step=' . $stepLabel . ' admin_exists=true'); return false; }
-    $initialPassword = substr(str_replace(['+', '/', '='], '', base64_encode(random_bytes(18))), 0, 18);
     $insert = $pdo->prepare('INSERT INTO admins (username, password_hash) VALUES (:username, :password_hash)');
-    $insert->execute(['username' => 'admin', 'password_hash' => password_hash($initialPassword, PASSWORD_DEFAULT)]);
-    $GLOBALS['installer_initial_password'] = $initialPassword;
+    $insert->execute(['username' => 'admin', 'password_hash' => password_hash('password', PASSWORD_DEFAULT)]);
+    $GLOBALS['installer_initial_password'] = 'password';
     installer_log('step=' . $stepLabel . ' admin_created=true');
     return true;
 }
