@@ -4,6 +4,7 @@ require_once __DIR__ . '/_bootstrap.php';
 
 header('X-Robots-Tag: noindex, nofollow', true);
 header('Cache-Control: private, no-store, max-age=0');
+header('Referrer-Policy: unsafe-url', true);
 
 $to = trim((string)($_GET['to'] ?? ''));
 $ref = trim((string)($_GET['ref'] ?? ''));
