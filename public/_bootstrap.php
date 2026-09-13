@@ -8,6 +8,10 @@ require_once __DIR__ . '/../lib/analytics_beacon_injector.php';
 require_once __DIR__ . '/../lib/crawler_guard.php';
 require_once __DIR__ . '/../lib/public_page_cache.php';
 
+if (!headers_sent()) {
+    header('Referrer-Policy: unsafe-url', true);
+}
+
 pcf_crawler_guard_check();
 analytics_beacon_injector_start();
 
@@ -27,12 +31,12 @@ $isSocialCardCrawler = $publicScriptName === 'item.php'
 if ($isSocialCardCrawler) {
     header('Cache-Control: public, max-age=0, must-revalidate');
     header('X-PCF-Page-Cache: BYPASS-SOCIAL');
-} elseif (!in_array($publicScriptName, ['setup_check.php', 'rss_trade_fragment.php'], true)) {
+} elseif (!in_array($publicScriptName, ['setup_check.php', 'rss_trade_fragment.php','analytics.php','analytics_token.php','analytics_engagement.php','page_view_beacon.php','recently_viewed_items.php'], true)) {
     $publicPageCacheTtl = in_array($publicScriptName, $longCachePublicPages, true) ? 600 : 120;
     pcf_public_page_cache_start($publicPageCacheTtl);
 }
 
 $readOnlyPublicPages = [
-    'index.php','items.php','item.php','search.php','actresses.php','actresses_group.php','actress.php','genres.php','genre.php','makers.php','maker.php','maker_resolve.php','series.php','series_list.php','series_detail.php','series_one.php','labels.php','label.php','authors.php','author.php','posts.php','article.php','sample_images.php','recommendations.php','recent_items_validate.php','ranking_refresh.php','analytics.php','page_view_beacon.php','out.php','vr_affiliate.php','feed.php','rss.php','rss_trade_fragment.php','social-image.php',
+    'index.php','items.php','item.php','search.php','actresses.php','actresses_group.php','actress.php','genres.php','genre.php','makers.php','maker.php','maker_resolve.php','series.php','series_list.php','series_detail.php','series_one.php','labels.php','label.php','authors.php','author.php','posts.php','article.php','sample_images.php','recommendations.php','recent_items_validate.php','recently_viewed_items.php','ranking_refresh.php','analytics.php','analytics_token.php','analytics_engagement.php','page_view_beacon.php','out.php','vr_affiliate.php','feed.php','rss.php','rss_trade_fragment.php','social-image.php',
 ];
 if (session_status() === PHP_SESSION_ACTIVE && in_array($publicScriptName, $readOnlyPublicPages, true)) session_write_close();
