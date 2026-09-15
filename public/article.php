@@ -34,7 +34,7 @@ require __DIR__ . '/partials/header.php';
             <p>価格: <?php echo e((string) $article['price']); ?>円</p>
         <?php endif; ?>
         <?php if (!empty($article['affiliate_url'])): ?>
-            <p><a href="<?php echo e((string)$article['affiliate_url']); ?>" target="_blank" rel="sponsored nofollow noopener noreferrer">SOKUMIRU商品ページへ</a></p>
+            <p><a href="<?php echo e((string)$article['affiliate_url']); ?>" target="_blank" rel="sponsored nofollow noopener">SOKUMIRU商品ページへ</a></p>
         <?php endif; ?>
 </article>
 <?php
