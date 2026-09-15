@@ -464,7 +464,7 @@ function rss_ensure_tables(): void
     }
     if (!rss_table_column_exists('partner_rss', 'show_rss')) {
         try {
-            $pdo->exec('ALTER TABLE partner_rss ADD COLUMN show_rss TINYINT(1) NOT NULL DEFAULT 1');
+            $pdo->exec('ALTER TABLE partner_rss ADD COLUMN show_rss TINYINT(1) NOT NULL DEFAULT 0');
         } catch (Throwable) {
         }
     }
