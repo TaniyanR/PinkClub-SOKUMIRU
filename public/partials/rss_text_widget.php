@@ -21,7 +21,7 @@ try {
 <div class="rss-widget rss-widget--text block" data-rss-fragment="text">
   <div class="rss-box">
     <?php if($items!==[]): ?><ul class="rss-list">
-      <?php foreach($items as $item): ?><li class="rss-list__item"><a href="<?= e(rss_trade_out_url($item)) ?>" target="_blank" rel="noopener noreferrer"><?= e((string)($item['title']??'')) ?></a></li><?php endforeach; ?>
+      <?php foreach($items as $item): ?><li class="rss-list__item"><a href="<?= e(rss_trade_out_url($item)) ?>" target="_blank" rel="noopener"><?= e((string)($item['title']??'')) ?></a></li><?php endforeach; ?>
     </ul><?php else: ?><p class="sidebar-empty">テキストRSSの記事がありません。</p><?php endif; ?>
   </div>
 </div>
