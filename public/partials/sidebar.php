@@ -157,7 +157,7 @@ if ($fixedPages === []) {
         <?php else : ?>
             <ul class="sidebar-links sidebar-links--partners">
                 <?php foreach ($partnerLinks as $link) : ?>
-                    <li><a href="<?= e((string)$link['url']) ?>" target="_blank" rel="noopener noreferrer"><?= e((string)$link['name']) ?></a></li>
+                    <li><a href="<?= e((string)$link['url']) ?>" target="_blank" rel="noopener"><?= e((string)$link['name']) ?></a></li>
                 <?php endforeach; ?>
             </ul>
         <?php endif; ?>
