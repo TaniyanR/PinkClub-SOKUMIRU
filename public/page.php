@@ -218,7 +218,7 @@ function about_access_ranking_html(): string
         if (filter_var($siteUrl, FILTER_VALIDATE_URL) !== false
             && in_array(strtolower((string)parse_url($siteUrl, PHP_URL_SCHEME)), ['http', 'https'], true)
         ) {
-            $siteLink = '<a href="' . e($siteUrl) . '" target="_blank" rel="noopener noreferrer nofollow">' . e($siteName) . '</a>';
+            $siteLink = '<a href="' . e($siteUrl) . '" target="_blank" rel="noopener nofollow">' . e($siteName) . '</a>';
         }
         $html .= '<li class="pcf-reverse-ranking__row">'
             . '<span class="pcf-reverse-ranking__position">' . e((string)($index + 1)) . '</span>'
