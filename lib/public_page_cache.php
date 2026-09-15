@@ -32,12 +32,28 @@ function pcf_public_page_cache_start(int $ttlSeconds = 120): void
         'deletion_request_submit.php',
         'page.php',
     ];
+    // 本文だけを保存するページキャッシュから、非HTML・リクエスト固有処理を除外する。
+    $cacheBypassScripts = [
+        'recommendations.php',
+        'recently_viewed_items.php',
+        'feed.php',
+        'feed-10.php',
+        'feed-60.php',
+        'feed-free-10.php',
+        'feed-free-60.php',
+    ];
+    $isSampleImagesJson = $scriptName === 'sample_images.php'
+        && strtolower(trim((string)($_GET['format'] ?? ''))) === 'json';
+    $isTrackedLinkVisit = $scriptName === 'links.php' && (int)($_GET['from'] ?? 0) > 0;
+    $mustBypassCache = in_array($scriptName, $cacheBypassScripts, true)
+        || $isSampleImagesJson || $isTrackedLinkVisit;
 
     if (
         str_contains($requestPath, '/admin/')
         || str_contains($requestPath, '/api/')
         || $scriptName === 'page_view_beacon.php'
         || in_array($scriptName, $excludedScripts, true)
+        || $mustBypassCache
         || isset($_GET['pcf_nocache'])
     ) {
         if (in_array($scriptName, $excludedScripts, true)) {
@@ -63,8 +79,14 @@ function pcf_public_page_cache_start(int $ttlSeconds = 120): void
         || $clientHintMobile === '?1'
         || ($userAgent !== '' && preg_match('/Android.*Mobile|iPhone|iPod|Windows Phone|BlackBerry|webOS/i', $userAgent));
 
-    $host = strtolower((string)($_SERVER['HTTP_HOST'] ?? ''));
-    $variant = $isMobile ? 'sp' : 'pc';
+    $baseParts = parse_url(defined('BASE_URL') ? (string)BASE_URL : '');
+    $cacheHost = is_array($baseParts) ? strtolower((string)($baseParts['host'] ?? '')) : '';
+    $cachePort = is_array($baseParts) && isset($baseParts['port']) ? (int)$baseParts['port'] : null;
+    if ($cacheHost === '') {
+        $cacheHost = 'pinkclub-sokumiru.com';
+    }
+    $cacheAuthority = $cacheHost . ($cachePort !== null ? ':' . $cachePort : '');
+    $variant = ($isMobile ? 'sp' : 'pc') . '|link-rel-v2';
     $cacheQuery = [];
     parse_str((string)(parse_url($requestUri, PHP_URL_QUERY) ?? ''), $cacheQuery);
     $allowedCacheQueryKeys = [
@@ -102,8 +124,11 @@ function pcf_public_page_cache_start(int $ttlSeconds = 120): void
     if ($normalizedQuery !== '') {
         $normalizedRequestUri .= '?' . $normalizedQuery;
     }
-    $cacheGeneration = $scriptName === 'item.php' ? 'v3-social-card' : 'v2';
-    $cacheKey = hash('sha256', $cacheGeneration . '|' . $host . '|' . $variant . '|' . $normalizedRequestUri);
+    $cacheGeneration = $scriptName === 'item.php' ? 'v4-social-card' : 'v3';
+    if ($scriptName === 'index.php') {
+        $cacheGeneration = 'v4-home-visible-products';
+    }
+    $cacheKey = hash('sha256', $cacheGeneration . '|' . $cacheAuthority . '|' . $variant . '|' . $normalizedRequestUri);
     $cacheFile = $cacheDirectory . '/' . $cacheKey . '.html';
     // Sixteen lock shards prevent a cache stampede without creating one lock file per URL.
     $cacheLockFile = $cacheDirectory . '/.regenerate-' . substr($cacheKey, 0, 1) . '.lock';
