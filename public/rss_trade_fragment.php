@@ -8,7 +8,7 @@ header('X-Robots-Tag: noindex, nofollow');
 header('Cache-Control: private, no-store, max-age=0');
 if(strtoupper((string)($_SERVER['REQUEST_METHOD']??'GET'))!=='GET'){http_response_code(405);exit;}
 $type=trim((string)($_GET['type']??''));if(!in_array($type,['text','image','bottom'],true)){http_response_code(400);exit;}
-$cacheDir=dirname(__DIR__).'/storage/cache/rss-fragments';$ttl=180;$cacheFile=$cacheDir.'/v3-'.$type.'.html';$lockFile=$cacheDir.'/.v3-'.$type.'.lock';if(!is_dir($cacheDir))@mkdir($cacheDir,0775,true);
+$cacheDir=dirname(__DIR__).'/storage/cache/rss-fragments';$ttl=180;$cacheFile=$cacheDir.'/v4-'.$type.'.html';$lockFile=$cacheDir.'/.v4-'.$type.'.lock';if(!is_dir($cacheDir))@mkdir($cacheDir,0775,true);
 if(is_file($cacheFile)&&(time()-(int)filemtime($cacheFile))<$ttl){$cached=@file_get_contents($cacheFile);if(is_string($cached)&&$cached!==''){header('X-PCF-RSS-Fragment: HIT');echo $cached;exit;}}
 $lock=is_dir($cacheDir)?@fopen($lockFile,'c'):false;$hasLock=is_resource($lock)&&@flock($lock,LOCK_EX|LOCK_NB);
 if(!$hasLock&&is_file($cacheFile)){$stale=@file_get_contents($cacheFile);if(is_string($stale)&&$stale!==''){header('X-PCF-RSS-Fragment: STALE');echo $stale;if(is_resource($lock))fclose($lock);exit;}}
