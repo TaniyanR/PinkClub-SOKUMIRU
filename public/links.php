@@ -45,7 +45,7 @@ include __DIR__ . '/partials/header.php';
 <section class="block"><h1 class="section-title">リンク集</h1>
 <ul>
 <?php foreach ($rows as $r) : ?>
-<li><a href="<?php echo e(public_url('out.php') . '?id=' . (string)$r['id']); ?>" target="_blank" rel="noopener noreferrer"><?php echo e((string)$r['site_name']); ?></a></li>
+<li><a href="<?php echo e(public_url('out.php') . '?id=' . (string)$r['id']); ?>" target="_blank" rel="noopener"><?php echo e((string)$r['site_name']); ?></a></li>
 <?php endforeach; ?>
 <?php if ($rows === []) : ?><li>まだリンクがありません。</li><?php endif; ?>
 </ul></section>
