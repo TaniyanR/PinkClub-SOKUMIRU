@@ -735,10 +735,6 @@
   width: 100% !important;
   max-width: 100% !important;
 }
-.site-main--legacy .rail-row--home-actresses {
-  flex-wrap: wrap;
-  overflow-x: visible;
-}
 
 @media (max-width: 900px) {
   .site-main--legacy .rail-row--home-actresses,
