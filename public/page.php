@@ -197,7 +197,9 @@ function about_access_ranking_html(): string
             return '<p class="pcf-reverse-ranking__empty">アクセスランキングのデータがありません。</p>';
         }
 
-        $stmt = db()->query('SELECT COALESCE(NULLIF(ps.name, ""), NULLIF(in_logs.referer_host, ""), NULLIF(in_logs.ref_code, "")) AS site_name, MAX(NULLIF(ps.url, "")) AS site_url, COUNT(*) AS in_count FROM in_logs LEFT JOIN partner_sites ps ON ps.ref_code = in_logs.ref_code GROUP BY site_name ORDER BY in_count DESC, site_name ASC LIMIT 10');
+        $nofollowSelect = db_column_exists('partner_sites', 'rel_nofollow')
+            ? 'MAX(COALESCE(ps.rel_nofollow, 0))' : '0';
+        $stmt = db()->query('SELECT COALESCE(NULLIF(ps.name, ""), NULLIF(in_logs.referer_host, ""), NULLIF(in_logs.ref_code, "")) AS site_name, MAX(NULLIF(ps.url, "")) AS site_url, ' . $nofollowSelect . ' AS rel_nofollow, COUNT(*) AS in_count FROM in_logs LEFT JOIN partner_sites ps ON ps.ref_code = in_logs.ref_code GROUP BY site_name ORDER BY in_count DESC, site_name ASC LIMIT 10');
         $rows = $stmt ? $stmt->fetchAll(PDO::FETCH_ASSOC) : [];
     } catch (Throwable) {
         $rows = [];
@@ -218,7 +220,8 @@ function about_access_ranking_html(): string
         if (filter_var($siteUrl, FILTER_VALIDATE_URL) !== false
             && in_array(strtolower((string)parse_url($siteUrl, PHP_URL_SCHEME)), ['http', 'https'], true)
         ) {
-            $siteLink = '<a href="' . e($siteUrl) . '" target="_blank" rel="noopener noreferrer nofollow">' . e($siteName) . '</a>';
+            $partnerRel = ((int)($row['rel_nofollow'] ?? 0) === 1) ? 'noopener nofollow' : 'noopener';
+            $siteLink = '<a href="' . e($siteUrl) . '" target="_blank" rel="' . e($partnerRel) . '">' . e($siteName) . '</a>';
         }
         $html .= '<li class="pcf-reverse-ranking__row">'
             . '<span class="pcf-reverse-ranking__position">' . e((string)($index + 1)) . '</span>'

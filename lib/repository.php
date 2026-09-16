@@ -570,7 +570,7 @@ function fetch_label(string $labelId, string $labelName = ''): ?array
     $usesItemId = db_column_exists('item_labels', 'item_id');
     $queries = $usesItemId
         ? [
-            ['sql' => 'SELECT COALESCE(NULLIF(dmm_id, ""), label_name) AS id, label_name AS name, "" AS ruby, COUNT(*) AS item_count FROM item_labels WHERE dmm_id = :label_id OR label_name = :label_id GROUP BY COALESCE(NULLIF(dmm_id, ""), label_name), label_name ORDER BY item_count DESC LIMIT 1', 'params' => [':label_id' => $labelId]],
+            ['sql' => 'SELECT COALESCE(NULLIF(dmm_id, ""), label_name) AS id, label_name AS name, "" AS ruby, COUNT(*) AS item_count FROM item_labels WHERE dmm_id = :label_id OR label_name = :label_name_value GROUP BY COALESCE(NULLIF(dmm_id, ""), label_name), label_name ORDER BY item_count DESC LIMIT 1', 'params' => [':label_id' => $labelId, ':label_name_value' => $labelId]],
             ['sql' => 'SELECT COALESCE(NULLIF(dmm_id, ""), label_name) AS id, label_name AS name, "" AS ruby, COUNT(*) AS item_count FROM item_labels WHERE label_name = :label_name GROUP BY COALESCE(NULLIF(dmm_id, ""), label_name), label_name ORDER BY item_count DESC LIMIT 1', 'params' => [':label_name' => $labelName]],
         ]
         : [

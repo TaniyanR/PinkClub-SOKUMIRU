@@ -81,7 +81,7 @@ $copyrightYears = $copyrightStartYear >= $currentYear
 <?php endif; ?>
 <footer class="site-footer">
   <div class="site-footer__credit">
-    <a href="https://sokmil-ad.com/" target="_blank" rel="noopener noreferrer nofollow"><img src="https://sokmil-ad.com/api/credit/135x18.gif" alt="WEB SERVICE BY SOKMIL" width="135" height="18"></a>
+    <a href="https://sokmil-ad.com/" target="_blank" rel="noopener nofollow"><img src="https://sokmil-ad.com/api/credit/135x18.gif" alt="WEB SERVICE BY SOKMIL" width="135" height="18"></a>
   </div>
   <div class="site-footer__copy">© <?= e($copyrightYears) ?> <a href="<?= e(public_url('')) ?>"><?= e($siteName) ?></a></div>
 </footer>

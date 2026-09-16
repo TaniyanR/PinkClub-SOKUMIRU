@@ -3,10 +3,12 @@ declare(strict_types=1);
 
 require_once __DIR__ . '/db.php';
 require_once __DIR__ . '/helpers.php';
+require_once __DIR__ . '/repository.php';
+require_once __DIR__ . '/home_item_visibility.php';
 
 function pcf_home_rotation_cache_file(): string
 {
-    return dirname(__DIR__) . '/storage/cache/home-rotation.json';
+    return dirname(__DIR__) . '/storage/cache/home-rotation-v2.json';
 }
 
 function pcf_home_rotation_read(): array
@@ -104,7 +106,7 @@ function pcf_home_rotation_refresh(?PDO $pdo = null): array
          sample_movie_url_720,sample_movie_url_644,sample_movie_url_560,sample_movie_url_476,
          release_date,created_at,updated_at',
         'items',
-        'item_source="sokumiru_product" AND (release_date IS NULL OR release_date="" OR release_date<=CURDATE())',
+        items_product_source_where() . ' AND ' . pcf_home_item_image_where(),
         40
     );
     $genres = pcf_home_rotation_query(

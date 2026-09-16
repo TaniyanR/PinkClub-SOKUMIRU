@@ -148,7 +148,7 @@ if (!function_exists('render_shared_content_ad_row')) {
         $renderColumn=static function(array $columnItems): string {
             ob_start(); echo '<div class="rss-widget rss-widget--text block"><div class="rss-box">';
             if($columnItems===[]) echo '<p class="sidebar-empty">テキストRSSの記事がありません。</p>';
-            else { echo '<ul class="rss-list">'; foreach($columnItems as $item){$href=rss_trade_out_url($item);echo '<li class="rss-list__item"><a href="'.e($href).'" target="_blank" rel="noopener noreferrer">'.e((string)($item['title']??'')).'</a></li>'; } echo '</ul>'; }
+            else { echo '<ul class="rss-list">'; foreach($columnItems as $item){$href=rss_trade_out_url($item);echo '<li class="rss-list__item"><a href="'.e($href).'" target="_blank" rel="noopener">'.e((string)($item['title']??'')).'</a></li>'; } echo '</ul>'; }
             echo '</div></div>'; return (string)ob_get_clean();
         };
         echo '<div class="content-ad-row content-ad-row--rss-split" data-rss-fragment="bottom" style="margin-top:20px;">';

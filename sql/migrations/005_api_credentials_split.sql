@@ -11,7 +11,7 @@ CREATE TABLE IF NOT EXISTS api_credentials (
 
 INSERT INTO api_credentials (api_type, api_id, created_at, updated_at)
 SELECT 'items',
-       COALESCE((SELECT setting_value FROM settings WHERE setting_key = 'fanza_api_id' LIMIT 1), ''),
+       COALESCE((SELECT setting_value FROM settings WHERE setting_key = 'sokumiru_api_key' LIMIT 1), ''),
        NOW(), NOW()
 ON DUPLICATE KEY UPDATE updated_at = updated_at;
 

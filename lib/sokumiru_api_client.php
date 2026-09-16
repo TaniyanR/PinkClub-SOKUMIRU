@@ -83,6 +83,7 @@ final class SokumiruApiClient
     {
         $currentUrl = $url;
         $maxRedirects = 3;
+        $ipv4Retried = false;
 
         for ($redirects = 0; $redirects <= $maxRedirects; $redirects++) {
             $this->waitForRequestSlot();
@@ -107,6 +108,9 @@ final class SokumiruApiClient
                     return strlen($header);
                 },
             ];
+            if ($ipv4Retried) {
+                $options[CURLOPT_IPRESOLVE] = CURL_IPRESOLVE_V4;
+            }
             $referer = $this->normalizedReferer();
             if ($referer !== '') {
                 $options[CURLOPT_REFERER] = $referer;
@@ -115,9 +119,17 @@ final class SokumiruApiClient
 
             $response = curl_exec($ch);
             if ($response === false) {
-                $error = curl_error($ch);
+                $errno = curl_errno($ch);
+                $info = curl_getinfo($ch);
                 curl_close($ch);
-                throw new RuntimeException('SOKUMIRU API通信エラー: ' . $error);
+                // Retry only a failed connection, never a completed request/HTTP error.
+                // A single IPv4 attempt covers servers with an unusable IPv6 route.
+                if (!$ipv4Retried && self::canRetryConnection($errno, $info)) {
+                    $ipv4Retried = true;
+                    $redirects--;
+                    continue;
+                }
+                throw new RuntimeException(self::connectionErrorMessage($errno, $info));
             }
             $httpCode = (int)curl_getinfo($ch, CURLINFO_HTTP_CODE);
             curl_close($ch);
@@ -135,6 +147,28 @@ final class SokumiruApiClient
         }
 
         throw new RuntimeException('SOKUMIRU APIの転送処理に失敗しました。');
+    }
+
+    private static function canRetryConnection(int $errno, array $info): bool
+    {
+        return in_array($errno, [CURLE_COULDNT_CONNECT, CURLE_OPERATION_TIMEDOUT], true)
+            && (float)($info['connect_time'] ?? 0) <= 0.0
+            && (int)($info['http_code'] ?? 0) === 0;
+    }
+
+    private static function connectionErrorMessage(int $errno, array $info): string
+    {
+        // Do not expose curl_error(): it may contain the credential-bearing URL.
+        if ($errno === CURLE_COULDNT_RESOLVE_HOST) {
+            return 'SOKUMIRU APIの接続先を名前解決できませんでした（cURL ' . $errno . '）。サーバーのDNS設定を確認してください。';
+        }
+        if (self::canRetryConnection($errno, $info)) {
+            return 'SOKUMIRU APIへの接続に失敗しました（cURL ' . $errno . '、IPv4再試行済み）。APIから認証結果は返っていません。時間をおいて再実行し、続く場合はサーバーからsokmil-ad.comのHTTPS接続可否を確認してください。';
+        }
+        if ($errno === CURLE_OPERATION_TIMEDOUT) {
+            return 'SOKUMIRU APIの応答待ちがタイムアウトしました（cURL ' . $errno . '）。時間をおいて再実行してください。';
+        }
+        return 'SOKUMIRU APIとの通信に失敗しました（cURL ' . $errno . '）。サーバーの接続・TLS設定を確認してください。';
     }
 
     private function normalizedReferer(): string
@@ -284,3 +318,4 @@ final class SokumiruApiClient
         }
     }
 }
+

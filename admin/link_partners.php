@@ -10,6 +10,17 @@ analytics_ensure_tables();
 $title = '相互リンク管理';
 $message = null;
 
+// 既存DBでも管理画面からnofollow設定を利用できるよう互換追加する。
+$partnerNofollowSupported = db_column_exists('partner_sites', 'rel_nofollow');
+if (!$partnerNofollowSupported) {
+    try {
+        db()->exec('ALTER TABLE partner_sites ADD COLUMN rel_nofollow TINYINT(1) NOT NULL DEFAULT 0 AFTER show_link');
+        $partnerNofollowSupported = true;
+    } catch (Throwable $e) {
+        error_log('[partner-links] rel_nofollow column setup failed: ' . $e->getMessage());
+    }
+}
+
 if ($_SERVER['REQUEST_METHOD'] === 'POST') {
     csrf_validate_or_fail((string)post('_csrf', ''));
     $action = (string)post('action', 'create');
@@ -23,9 +34,17 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
             $message = '公開HTTP(S) URLを入力してください。';
         } else {
             $refCode = 'partner_' . substr(sha1($name . '|' . $url . '|' . microtime(true)), 0, 16);
-            db()->prepare('INSERT INTO partner_sites(name,ref_code,url,is_enabled,show_link,created_at,updated_at) VALUES(:name,:ref,:url,1,:show_link,NOW(),NOW())')->execute([
-                ':name'=>$name, ':ref'=>$refCode, ':url'=>$url, ':show_link'=>post('show_link','0')==='1'?1:0,
-            ]);
+            $showLink = post('show_link', '0') === '1' ? 1 : 0;
+            $relNofollow = post('rel_nofollow', '0') === '1' ? 1 : 0;
+            if ($partnerNofollowSupported) {
+                db()->prepare('INSERT INTO partner_sites(name,ref_code,url,is_enabled,show_link,rel_nofollow,created_at,updated_at) VALUES(:name,:ref,:url,1,:show_link,:rel_nofollow,NOW(),NOW())')->execute([
+                    ':name'=>$name, ':ref'=>$refCode, ':url'=>$url, ':show_link'=>$showLink, ':rel_nofollow'=>$relNofollow,
+                ]);
+            } else {
+                db()->prepare('INSERT INTO partner_sites(name,ref_code,url,is_enabled,show_link,created_at,updated_at) VALUES(:name,:ref,:url,1,:show_link,NOW(),NOW())')->execute([
+                    ':name'=>$name, ':ref'=>$refCode, ':url'=>$url, ':show_link'=>$showLink,
+                ]);
+            }
             $siteId=(int)db()->lastInsertId();
             if($siteId>0&&$rssUrl!=='') db()->prepare('INSERT INTO partner_rss(partner_site_id,feed_url,is_enabled,show_rss,created_at,updated_at) VALUES(:sid,:url,1,:show_rss,NOW(),NOW())')->execute([
                 ':sid'=>$siteId, ':url'=>$rssUrl, ':show_rss'=>post('show_rss','0')==='1'?1:0,
@@ -36,6 +55,12 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
     } elseif ($action === 'toggle_link') {
         db()->prepare('UPDATE partner_sites SET show_link=:show, updated_at=NOW() WHERE id=:id')->execute([':show'=>post('show_link','0')==='1'?1:0,':id'=>(int)post('id',0)]);
         $message='相互リンク表示を更新しました。';
+    } elseif ($action === 'toggle_nofollow' && $partnerNofollowSupported) {
+        db()->prepare('UPDATE partner_sites SET rel_nofollow=:nofollow, updated_at=NOW() WHERE id=:id')->execute([
+            ':nofollow'=>post('rel_nofollow','0')==='1'?1:0,
+            ':id'=>(int)post('id',0),
+        ]);
+        $message='rel="nofollow"設定を更新しました。';
     } elseif ($action === 'toggle_rss') {
         db()->prepare('UPDATE partner_rss SET show_rss=:show, updated_at=NOW() WHERE id=:id')->execute([':show'=>post('show_rss','0')==='1'?1:0,':id'=>(int)post('rss_id',0)]);
         $message='RSS表示を更新しました。';
@@ -63,17 +88,18 @@ require __DIR__ . '/includes/header.php';
   <?php if($message): ?><p class="flash success"><?= e($message) ?></p><?php endif; ?>
   <form method="post" style="max-width:760px;"><?= csrf_input() ?><input type="hidden" name="action" value="create">
     <label>サイト名<input name="name" required></label><label>URL<input name="url" type="url" required></label><label>RSS URL<input name="rss_url" type="url"></label>
-    <label><input type="checkbox" name="show_link" value="1" checked> 相互リンクを表示する</label><label><input type="checkbox" name="show_rss" value="1" checked> RSSを表示する</label>
+    <label><input type="checkbox" name="show_link" value="1" checked> 相互リンクを表示する</label><label><input type="checkbox" name="rel_nofollow" value="1" <?= !$partnerNofollowSupported ? 'disabled' : '' ?>> rel="nofollow"</label><label><input type="checkbox" name="show_rss" value="1" checked> RSSを表示する</label>
     <fieldset><legend>表示順</legend><label><input type="radio" name="sort_mode" value="registered" <?= $sortMode!=='kana'?'checked':'' ?>> 登録順</label><label><input type="radio" name="sort_mode" value="kana" <?= $sortMode==='kana'?'checked':'' ?>> あいうえお順</label></fieldset>
     <div class="admin-actions"><button type="submit">追加</button></div>
   </form>
 </section>
 <section class="admin-card">
   <p style="margin-top:0;">アクセストレードは直近30日のIN/OUTを使用します。「返還不足」は IN − OUT、配分ウェイトは現在のRSS優先度計算値です。</p>
-  <div style="overflow-x:auto;"><table class="admin-table"><tr><th>ID</th><th style="white-space:nowrap;">サイト名</th><th>URL</th><th>30日IN</th><th>30日OUT</th><th>返還不足</th><th>配分ウェイト</th><th>相互リンク表示</th><th>RSS表示</th><th>編集</th><th>削除</th></tr>
+  <div style="overflow-x:auto;"><table class="admin-table"><tr><th>ID</th><th style="white-space:nowrap;">サイト名</th><th>URL</th><th>30日IN</th><th>30日OUT</th><th>返還不足</th><th>配分ウェイト</th><th>相互リンク表示</th><th>rel="nofollow"</th><th>RSS表示</th><th>編集</th><th>削除</th></tr>
   <?php foreach($rows as $r): $ref=trim((string)($r['ref_code']??''));$metric=$tradeMetrics[$ref]??['in'=>0,'out'=>0];$inCount=max(0,(int)$metric['in']);$outCount=max(0,(int)$metric['out']);$debt=$inCount-$outCount;$weight=rss_trade_weight($inCount,$outCount); ?>
     <tr><td><?= e((string)$r['id']) ?></td><td><?= e((string)$r['name']) ?></td><td><?= e((string)$r['url']) ?></td><td><?= $inCount ?></td><td><?= $outCount ?></td><td><?= e(($debt>0?'+':'').(string)$debt) ?></td><td><?= e(number_format($weight,2,'.','')) ?></td>
       <td><form method="post"><?= csrf_input() ?><input type="hidden" name="action" value="toggle_link"><input type="hidden" name="id" value="<?= e((string)$r['id']) ?>"><input type="checkbox" name="show_link" value="1" <?= ((int)($r['show_link']??1)===1)?'checked':'' ?> onchange="this.form.submit()"></form></td>
+      <td><?php if($partnerNofollowSupported): ?><form method="post"><?= csrf_input() ?><input type="hidden" name="action" value="toggle_nofollow"><input type="hidden" name="id" value="<?= e((string)$r['id']) ?>"><input type="checkbox" name="rel_nofollow" value="1" <?= ((int)($r['rel_nofollow']??0)===1)?'checked':'' ?> onchange="this.form.submit()"></form><?php endif; ?></td>
       <td><?php if((int)($r['rss_id']??0)>0): ?><form method="post"><?= csrf_input() ?><input type="hidden" name="action" value="toggle_rss"><input type="hidden" name="rss_id" value="<?= e((string)$r['rss_id']) ?>"><input type="checkbox" name="show_rss" value="1" <?= ((int)($r['show_rss']??0)===1)?'checked':'' ?> onchange="this.form.submit()"></form><?php endif; ?></td>
       <td><a class="button-secondary" href="<?= e(admin_url('link_partner_edit.php?id='.(string)$r['id'])) ?>">編集</a></td><td><form method="post"><?= csrf_input() ?><input type="hidden" name="action" value="delete"><input type="hidden" name="id" value="<?= e((string)$r['id']) ?>"><button type="submit" class="button-secondary">削除</button></form></td>
     </tr>
