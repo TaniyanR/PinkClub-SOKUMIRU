@@ -735,10 +735,6 @@
   width: 100% !important;
   max-width: 100% !important;
 }
-.site-main--legacy .rail-row--home-actresses {
-  flex-wrap: wrap;
-  overflow-x: visible;
-}
 
 @media (max-width: 900px) {
   .site-main--legacy .rail-row--home-actresses,
@@ -1080,4 +1076,23 @@
     height: 31px;
   }
 }
+
+/* Home personalization widgets stay in the shared stylesheet. */
+.pcf-recent,.pcf-recommendations{margin:18px 0 24px;padding:16px;border:1px solid #ddd;border-radius:8px;background:#fff}
+.pcf-recent__heading,.pcf-recommendations__heading{display:flex;align-items:flex-start;justify-content:space-between;gap:12px;margin-bottom:12px}
+.pcf-recent__heading h2,.pcf-recommendations__heading h2{margin:0 0 4px;font-size:22px}
+.pcf-recent__heading p,.pcf-recommendations__heading p{margin:0;color:#666;font-size:12px;line-height:1.5}
+.pcf-recent__heading-actions{display:flex;gap:7px;flex-wrap:wrap;justify-content:flex-end}
+.pcf-recent__control,.pcf-recent__remove,.pcf-recent-restore button,.pcf-recommendations__control,.pcf-recommendations-restore button{border:1px solid #888;border-radius:5px;background:#fff;color:#333;cursor:pointer}
+.pcf-recent__control,.pcf-recommendations__control{padding:7px 10px;font-size:12px;white-space:nowrap}
+.pcf-recent__list,.pcf-recommendations__list{display:flex;gap:14px;overflow-x:auto;padding:2px 2px 10px;scrollbar-width:thin}
+.pcf-recent__card{position:relative;display:flex;flex:0 0 180px;min-width:180px;flex-direction:column}
+.pcf-recommendations__card{flex:0 0 180px;min-width:180px}
+.pcf-recent__card-image,.pcf-recommendations__image{display:block;width:180px;height:250px;object-fit:cover;border-radius:6px;background:#eee}
+.pcf-recent__card-title,.pcf-recommendations__title{display:-webkit-box;margin:8px 0 6px;overflow:hidden;color:#1670b7;font-size:14px;font-weight:700;line-height:1.45;text-decoration:none;-webkit-box-orient:vertical;-webkit-line-clamp:3}
+.pcf-recent__card-title{height:4.35em;margin-bottom:7px}.pcf-recent__card-actions{display:flex;gap:6px;align-items:center;margin-top:auto}
+.pcf-recent__open{flex:1;padding:7px 8px;border:1px solid #555;border-radius:5px;color:#222;text-align:center;text-decoration:none;font-size:12px;font-weight:700}
+.pcf-recent__remove{padding:7px 8px;font-size:12px}.pcf-recommendations__reason{margin:0;color:#666;font-size:11px;line-height:1.45}
+.pcf-recent-restore,.pcf-recommendations-restore{margin:10px 0 20px;text-align:right}.pcf-recent-restore button,.pcf-recommendations-restore button{padding:6px 9px;font-size:12px}
+@media(max-width:700px){.pcf-recent,.pcf-recommendations{padding:12px}.pcf-recent__heading,.pcf-recommendations__heading{display:block}.pcf-recent__heading-actions{justify-content:flex-start;margin-top:9px}.pcf-recommendations__control{margin-top:9px}.pcf-recent__card,.pcf-recommendations__card{flex-basis:150px;min-width:150px}.pcf-recent__card-image,.pcf-recommendations__image{width:150px;height:210px}.pcf-recent-restore,.pcf-recommendations-restore{text-align:left}}
 
