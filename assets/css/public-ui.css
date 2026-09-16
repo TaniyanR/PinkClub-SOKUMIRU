@@ -719,6 +719,27 @@
   background: #fff;
 }
 
+/* Home taxonomy rows wrap like the standard product grid; history remains a rail. */
+.site-main--legacy .rail-row--home-taxonomy {
+  display: grid;
+  grid-template-columns: repeat(4, minmax(0, 1fr));
+  gap: 16px;
+  overflow: visible;
+}
+.site-main--legacy .rail-row--home-taxonomy .rail-card {
+  width: 100% !important;
+  min-width: 0 !important;
+  max-width: none !important;
+}
+.site-main--legacy .rail-row--home-taxonomy .rail-card .thumb {
+  width: 100% !important;
+  max-width: 100% !important;
+}
+.site-main--legacy .rail-row--home-actresses {
+  flex-wrap: wrap;
+  overflow-x: visible;
+}
+
 @media (max-width: 900px) {
   .site-main--legacy .rail-row--home-actresses,
   .site-main--legacy .rail-row--home-taxonomy {
@@ -1059,3 +1080,4 @@
     height: 31px;
   }
 }
+
