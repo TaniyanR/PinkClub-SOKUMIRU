@@ -15,8 +15,10 @@ if ($siteTitle === '') {
 $rawPageTitle = isset($pageTitle) && $pageTitle !== '' ? (string)$pageTitle : 'ログイン';
 $fullTitle = $rawPageTitle . ' | ' . $siteTitle;
 $faviconPath = trim(site_setting_get('site.favicon_path', ''));
-$faviconUrl = $faviconPath !== '' ? public_versioned_url($faviconPath) : '';
+$faviconUrl = site_media_public_url('favicon') ?: ($faviconPath !== '' ? public_versioned_url($faviconPath) : '');
 $faviconType = strtolower((string)pathinfo($faviconPath, PATHINFO_EXTENSION)) === 'png' ? 'image/png' : 'image/x-icon';
+$faviconMeta = site_media_meta_get('favicon');
+if (is_array($faviconMeta)) $faviconType = (string)$faviconMeta['mime_type'];
 ?>
 <!DOCTYPE html>
 <html lang="ja">
