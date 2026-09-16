@@ -45,7 +45,7 @@ try {
 }
 
 try {
-    $stmt = db()->query('SELECT COUNT(DISTINCT pr.partner_site_id) FROM partner_rss pr INNER JOIN partner_sites ps ON ps.id = pr.partner_site_id WHERE pr.feed_url <> "" AND COALESCE(pr.show_rss, pr.is_enabled, 1) = 1');
+    $stmt = db()->query('SELECT COUNT(DISTINCT pr.partner_site_id) FROM partner_rss pr INNER JOIN partner_sites ps ON ps.id = pr.partner_site_id WHERE pr.feed_url <> "" AND COALESCE(pr.show_rss, 0) = 1');
     $textRssSiteCount = $stmt ? (int)$stmt->fetchColumn() : null;
 } catch (Throwable $e) {
     try {
