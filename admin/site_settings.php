@@ -55,6 +55,8 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
     if($error===null){
         $pdo=db();
         try{
+            // CREATE TABLE may implicitly commit in MySQL. Prepare it before the transaction.
+            if (!site_media_ensure_table()) throw new RuntimeException('画像保存テーブルを準備できませんでした。');
             $pdo->beginTransaction();
             foreach($uploadSpecs as $field=>$spec){
                 if(!isset($_FILES[$field])||(int)($_FILES[$field]['error']??UPLOAD_ERR_NO_FILE)===UPLOAD_ERR_NO_FILE)continue;
