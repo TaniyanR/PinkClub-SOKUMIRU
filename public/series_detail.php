@@ -109,24 +109,14 @@ require __DIR__ . '/partials/header.php';
   <?php pcf_render_empty('このシリーズの作品はまだありません。'); ?>
 <?php endif; ?>
 
-<?php pcf_render_item_access_ranking(
+<?php pcf_render_entity_access_ranking(
+    '人気のシリーズランキング',
     $accessRankingTabs,
     $accessRankingPeriod,
-    static function (string $period) use ($series): string {
-        return public_url('series_detail.php') . '?' . http_build_query([
-            'id' => (int)$series['id'],
-            'rank_period' => $period,
-        ]) . '#access-ranking';
-    },
+    static fn(string $period): string => public_url('series_detail.php') . '?' . http_build_query(['id' => (int)$series['id'], 'rank_period' => $period]) . '#access-ranking',
     $accessRankingRows,
-    static function (array $rankingRow): string {
-        $rankingId = (int)($rankingRow['id'] ?? 0);
-        return $rankingId > 0
-            ? public_url('series_detail.php') . '?id=' . rawurlencode((string)$rankingId)
-            : '';
-    },
-    '人気のシリーズランキングのデータがありません。',
-    '人気のシリーズランキング'
+    static fn(array $rankingRow): string => public_url('series_detail.php') . '?id=' . rawurlencode((string)($rankingRow['id'] ?? '')),
+    '人気のシリーズランキングのデータがありません。'
 ); ?>
 
 <?php pcf_render_sample_movie_modal(); ?>
