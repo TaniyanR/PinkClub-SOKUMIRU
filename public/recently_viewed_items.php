@@ -60,7 +60,7 @@ $rowsById = [];
 try {
     $placeholders = implode(',', array_fill(0, count($ids), '?'));
     $stmt = db()->prepare(
-        'SELECT id, title, image_small, image_large, image_list, main_image_url, image_url, raw_json '
+        'SELECT id, title, image_small, image_large, image_list, raw_json '
         . 'FROM items WHERE id IN (' . $placeholders . ') AND ' . items_product_source_where('items')
     );
     foreach ($ids as $index => $id) {
@@ -75,6 +75,10 @@ try {
     }
 } catch (Throwable $e) {
     error_log('[recently_viewed_items] failed: ' . $e->getMessage());
+    // A database failure must not be mistaken for deleted products by the browser.
+    http_response_code(503);
+    echo json_encode(['error' => '履歴の商品情報を取得できませんでした。'], JSON_UNESCAPED_UNICODE);
+    exit;
 }
 
 $items = [];
@@ -98,8 +102,7 @@ foreach ($ids as $id) {
         $normalizeImageUrl($raw['imageURL']['large'] ?? ''),
         $normalizeImageUrl($raw['imageURL']['small'] ?? ''),
         $normalizeImageUrl($row['image_small'] ?? ''),
-        $normalizeImageUrl($row['image_url'] ?? ''),
-        $normalizeImageUrl($row['main_image_url'] ?? ''),
+        $normalizeImageUrl($row['image_large'] ?? ''),
     ];
     $imageCandidates = array_values(array_unique(array_filter($imageCandidates)));
     $image = (string)($imageCandidates[0] ?? '');
