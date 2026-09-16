@@ -14,6 +14,19 @@ $title = '自動設定';
 $message = '';
 $messageType = 'success';
 
+function api_auto_error_notice(Throwable $error, string $operation): string
+{
+    $reference = 'auto-' . bin2hex(random_bytes(4));
+    $driverCode = $error instanceof PDOException ? (string)($error->errorInfo[1] ?? '') : '';
+    error_log(sprintf('[%s] %s: %s code=%s driver=%s at %s:%d',
+        $reference, $operation, get_class($error), (string)$error->getCode(),
+        $driverCode, $error->getFile(), $error->getLine()));
+    return $operation . 'できませんでした。エラー識別番号: ' . $reference
+        . ($driverCode !== '' ? ' / DBコード: ' . $driverCode : '');
+}
+$stateError = '';
+
+
 $intervalOptions = [10, 20, 30, 60, 120, 180, 360, 720];
 $batchOptions = [1, 10, 20, 30, 50, 100, 200, 300, 500];
 
@@ -47,6 +60,12 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
         }
     }
 
+    $settingsSaved = false;
+    try {
+    // Prepare tables only when saving, never when viewing the page.
+    $pdo = db();
+    scheduler_ensure_schedule_table($pdo);
+    scheduler_seed_default_schedules($pdo);
     site_setting_set_many([
         'item_sync_enabled' => $enabled,
         'item_sync_interval_minutes' => (string)$interval,
@@ -55,12 +74,15 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
         'item_sync_exclude_keywords' => implode("\n", $excludeKeywords),
     ]);
 
-    $pdo = db();
-    scheduler_ensure_schedule_table($pdo);
-    scheduler_seed_default_schedules($pdo);
+    $settingsSaved = true;
     scheduler_apply_auto_settings($pdo);
 
     $message = '自動設定を保存しました。';
+    } catch (Throwable $error) {
+        $messageType = 'error';
+        $message = ($settingsSaved ? '設定値は保存されましたが、実行スケジュールへの反映が未完了です。' : '')
+            . api_auto_error_notice($error, '自動設定を保存');
+    }
 }
 
 $settings = settings_get();
@@ -72,12 +94,15 @@ if (!in_array($currentBatch, $batchOptions, true)) {
 $enabled = settings_bool('item_sync_enabled', false);
 $compoundLines = preg_split('/\R/u', site_setting_get('item_sync_compound_keywords', '')) ?: [];
 $excludeLines = preg_split('/\R/u', site_setting_get('item_sync_exclude_keywords', '')) ?: [];
-$pdo = db();
-scheduler_ensure_schedule_table($pdo);
-scheduler_seed_default_schedules($pdo);
-scheduler_apply_auto_settings($pdo);
-$stateStmt = $pdo->query("SELECT job_key, last_run_at, last_success, last_message, next_offset, lock_until FROM sync_job_state WHERE job_key IN ('items','actresses') ORDER BY FIELD(job_key, 'items','actresses')");
-$autoStates = $stateStmt ? $stateStmt->fetchAll(PDO::FETCH_ASSOC) : [];
+$autoStates = [];
+try {
+    $pdo = db();
+    // GET is read-only. Legacy optional fields use the template defaults.
+    $stateStmt = $pdo->query("SELECT * FROM sync_job_state WHERE job_key IN ('items','actresses') ORDER BY CASE job_key WHEN 'items' THEN 0 ELSE 1 END");
+    $autoStates = $stateStmt ? $stateStmt->fetchAll(PDO::FETCH_ASSOC) : [];
+} catch (Throwable $error) {
+    $stateError = api_auto_error_notice($error, '自動更新状態を取得');
+}
 
 $storedItemCount = null;
 $publicItemCount = null;
@@ -212,6 +237,11 @@ require __DIR__ . '/includes/header.php';
   <?php endif; ?>
 
   <h2 style="margin-top:24px;">自動更新状態</h2>
+  <?php if ($stateError !== ''): ?>
+    <div class="admin-notice admin-notice--error"><p><?= e($stateError) ?></p></div>
+  <?php elseif ($autoStates === []): ?>
+    <p class="admin-form-note">自動更新の実行履歴はまだありません。</p>
+  <?php endif; ?>
   <div class="admin-auto-settings__table-wrap">
   <table class="admin-table">
     <tr><th>ジョブ</th><th>最終実行日時</th><th>成功</th><th>メッセージ</th><th>次回offset</th><th>ロック期限</th></tr>
