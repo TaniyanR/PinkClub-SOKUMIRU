@@ -4,6 +4,7 @@ declare(strict_types=1);
 require_once __DIR__ . '/public/_bootstrap.php';
 require_once __DIR__ . '/lib/repository.php';
 require_once __DIR__ . '/lib/home_rotation_cache.php';
+require_once __DIR__ . '/lib/home_item_visibility.php';
 
 function redirect_canonical_home_url(): void
 {
@@ -65,7 +66,7 @@ function take_unique_items_for_home(array $items, array &$usedKeys, int $limit):
     $result = [];
 
     foreach (dedupe_items_by_key($items) as $item) {
-        if (!is_array($item)) {
+        if (!is_array($item) || pick_full_package_image($item) === '') {
             continue;
         }
         $contentId = strtolower(trim((string)($item['content_id'] ?? '')));
@@ -324,7 +325,7 @@ function home_column_exists(PDO $pdo, string $table, string $column): bool
 function fetch_items_with_order_fallback(PDO $pdo, array $orderByCandidates, int $limit): array
 {
     $limit = max(1, min(300, $limit));
-    $sourceWhere = items_product_source_where();
+    $sourceWhere = items_product_source_where() . ' AND ' . pcf_home_item_image_where();
     $sourceWhereSql = $sourceWhere !== '' ? ' WHERE ' . $sourceWhere : '';
 
     foreach ($orderByCandidates as $orderBy) {
@@ -357,49 +358,47 @@ function item_sample_state(array $item): array
     return ['movie_url' => $firstMovieUrl, 'movie_urls' => $movieUrls, 'has_images' => $hasImageSample];
 }
 
-function pick_full_package_image(array $item): string
+function home_package_image_candidates(array $item, bool $preferFullPackageImage = true): array
 {
-    foreach (['image_large', 'image_list', 'image_small'] as $key) {
-        if ($key === 'image_list') {
-            foreach (parse_index_image_urls((string)($item['image_list'] ?? '')) as $image) {
-                $candidate = trim((string)$image);
-                if ($candidate !== '') {
-                    return $candidate;
-                }
+    $keys = $preferFullPackageImage
+        ? ['image_large', 'image_list', 'image_small']
+        : ['image_small', 'image_large', 'image_list'];
+    $images = [];
+    foreach ($keys as $key) {
+        $values = $key === 'image_list'
+            ? parse_index_image_urls((string)($item[$key] ?? ''))
+            : [(string)($item[$key] ?? '')];
+        foreach ($values as $value) {
+            $candidate = normalize_index_image_url((string)$value);
+            if ($candidate !== '') {
+                $images[] = $candidate;
             }
-            continue;
-        }
-        $candidate = trim((string)($item[$key] ?? ''));
-        if ($candidate !== '') {
-            return $candidate;
         }
     }
+    // Package candidates only; keep retries bounded even for legacy image lists.
+    return array_slice(array_values(array_unique($images)), 0, 3);
+}
 
-    return '';
+function pick_full_package_image(array $item): string
+{
+    return home_package_image_candidates($item)[0] ?? '';
 }
 
 function render_item_card(array $item, int $width = 180, ?array $taxonomy = null, bool $preferFullPackageImage = false, bool $lazyLoad = true): void
 {
+    $imageCandidates = home_package_image_candidates($item, $preferFullPackageImage);
+    if ($imageCandidates === []) return;
     $itemUrl = app_url('public/item.php?id=' . (int)$item['id']);
     $title = (string)($item['title'] ?? '');
     $sample = item_sample_state($item);
     $movieClass = $sample['movie_url'] !== '' ? 'sample-button sample-button--enabled' : 'sample-button sample-button--disabled';
     $imageClass = $sample['has_images'] ? 'sample-button sample-button--enabled' : 'sample-button sample-button--disabled';
     $sampleImagesUrl = public_url('sample_images.php?content_id=' . rawurlencode((string)($item['content_id'] ?? '')) . '&format=json');
-    $thumbUrl = trim((string)($item['image_small'] ?? ''));
-    if ($preferFullPackageImage) {
-        $fullPackageImage = pick_full_package_image($item);
-        if ($fullPackageImage !== '') {
-            $thumbUrl = $fullPackageImage;
-        }
-    }
-    if ($thumbUrl === '') {
-        $thumbUrl = trim((string)($item['image_large'] ?? ''));
-    }
+    $thumbUrl = $imageCandidates[0];
     ?>
     <article class="card rail-card rail-card--product rail-card--<?= (int)$width ?>" style="width:<?= (int)$width ?>px;min-width:<?= (int)$width ?>px;max-width:<?= (int)$width ?>px;">
       <?php if ($thumbUrl !== ''): ?>
-        <a class="rail-card__image-link" href="<?= e($itemUrl) ?>"><img class="thumb" src="<?= e($thumbUrl) ?>" alt="<?= e($title) ?>"<?= $lazyLoad ? ' loading="lazy"' : '' ?> decoding="async" style="width:<?= (int)$width ?>px;max-width:<?= (int)$width ?>px;"></a>
+        <a class="rail-card__image-link" href="<?= e($itemUrl) ?>"><img class="thumb" data-home-image-candidates="<?= e((string)json_encode($imageCandidates, JSON_UNESCAPED_SLASHES | JSON_INVALID_UTF8_SUBSTITUTE)) ?>" src="<?= e($thumbUrl) ?>" alt="<?= e($title) ?>"<?= $lazyLoad ? ' loading="lazy"' : '' ?> decoding="async" style="width:<?= (int)$width ?>px;max-width:<?= (int)$width ?>px;"></a>
       <?php else: ?>
         <div class="rail-card__image-link"><div class="rail-card__noimage" style="width:<?= (int)$width ?>px;height:<?= (int)$width ?>px;">画像なし</div></div>
       <?php endif; ?>
@@ -456,7 +455,7 @@ $authorSection = ['name' => '', 'url' => '', 'items' => []];
 try {
     $pdo = db();
     $homeRotationCache = pcf_home_rotation_load();
-    $sourceWhere = items_product_source_where();
+    $sourceWhere = items_product_source_where() . ' AND ' . pcf_home_item_image_where();
     $sourceWhereSql = $sourceWhere !== '' ? ' WHERE ' . $sourceWhere : '';
     $itemExistsStmt = $pdo->query('SELECT 1 FROM items' . $sourceWhereSql . ' LIMIT 1');
     $itemCount = ($itemExistsStmt && $itemExistsStmt->fetchColumn()) ? 1 : 0;
@@ -517,8 +516,8 @@ try {
             foreach (array_slice($genreCandidates, 0, 3) as $index => $genre) {
                 $genreItems = [];
                 foreach ([
-                    'SELECT i.id,i.content_id,i.title,i.image_small,i.image_large,i.image_list,i.raw_json,i.affiliate_url,i.sample_movie_url_720,i.sample_movie_url_644,i.sample_movie_url_560,i.sample_movie_url_476,i.release_date,i.updated_at FROM items i INNER JOIN item_genres ig ON ig.item_id = i.id INNER JOIN genres g ON g.dmm_id = ig.dmm_id WHERE g.id = :id AND ' . items_product_source_where('i') . ' ORDER BY i.view_count DESC, i.release_date DESC, i.updated_at DESC, i.id DESC LIMIT 120',
-                    'SELECT i.id,i.content_id,i.title,i.image_small,i.image_large,i.image_list,i.raw_json,i.affiliate_url,i.sample_movie_url_720,i.sample_movie_url_644,i.sample_movie_url_560,i.sample_movie_url_476,i.release_date,i.updated_at FROM items i INNER JOIN item_genres ig ON ig.item_id = i.id INNER JOIN genres g ON g.dmm_id = ig.dmm_id WHERE g.id = :id AND ' . items_product_source_where('i') . ' ORDER BY i.release_date DESC, i.updated_at DESC, i.id DESC LIMIT 120',
+                    'SELECT i.id,i.content_id,i.title,i.image_small,i.image_large,i.image_list,i.raw_json,i.affiliate_url,i.sample_movie_url_720,i.sample_movie_url_644,i.sample_movie_url_560,i.sample_movie_url_476,i.release_date,i.updated_at FROM items i INNER JOIN item_genres ig ON ig.item_id = i.id INNER JOIN genres g ON g.dmm_id = ig.dmm_id WHERE g.id = :id AND ' . items_product_source_where('i') . ' AND ' . pcf_home_item_image_where('i') . ' ORDER BY i.view_count DESC, i.release_date DESC, i.updated_at DESC, i.id DESC LIMIT 120',
+                    'SELECT i.id,i.content_id,i.title,i.image_small,i.image_large,i.image_list,i.raw_json,i.affiliate_url,i.sample_movie_url_720,i.sample_movie_url_644,i.sample_movie_url_560,i.sample_movie_url_476,i.release_date,i.updated_at FROM items i INNER JOIN item_genres ig ON ig.item_id = i.id INNER JOIN genres g ON g.dmm_id = ig.dmm_id WHERE g.id = :id AND ' . items_product_source_where('i') . ' AND ' . pcf_home_item_image_where('i') . ' ORDER BY i.release_date DESC, i.updated_at DESC, i.id DESC LIMIT 120',
                 ] as $genreSql) {
                     $genreItems = query_all_safe($pdo, $genreSql, [':id' => (int)$genre['id']]);
                     if ($genreItems !== []) {
@@ -527,8 +526,8 @@ try {
                 }
                 if ($genreItems === [] && home_column_exists($pdo, 'item_genres', 'content_id') && home_column_exists($pdo, 'item_genres', 'genre_id')) {
                     foreach ([
-                        'SELECT i.id,i.content_id,i.title,i.image_small,i.image_large,i.image_list,i.raw_json,i.affiliate_url,i.sample_movie_url_720,i.sample_movie_url_644,i.sample_movie_url_560,i.sample_movie_url_476,i.release_date,i.updated_at FROM items i INNER JOIN item_genres ig ON ig.content_id = i.content_id WHERE ig.genre_id = :id AND ' . items_product_source_where('i') . ' ORDER BY i.view_count DESC, i.release_date DESC, i.updated_at DESC, i.id DESC LIMIT 120',
-                        'SELECT i.id,i.content_id,i.title,i.image_small,i.image_large,i.image_list,i.raw_json,i.affiliate_url,i.sample_movie_url_720,i.sample_movie_url_644,i.sample_movie_url_560,i.sample_movie_url_476,i.release_date,i.updated_at FROM items i INNER JOIN item_genres ig ON ig.content_id = i.content_id WHERE ig.genre_id = :id AND ' . items_product_source_where('i') . ' ORDER BY i.release_date DESC, i.updated_at DESC, i.id DESC LIMIT 120',
+                        'SELECT i.id,i.content_id,i.title,i.image_small,i.image_large,i.image_list,i.raw_json,i.affiliate_url,i.sample_movie_url_720,i.sample_movie_url_644,i.sample_movie_url_560,i.sample_movie_url_476,i.release_date,i.updated_at FROM items i INNER JOIN item_genres ig ON ig.content_id = i.content_id WHERE ig.genre_id = :id AND ' . items_product_source_where('i') . ' AND ' . pcf_home_item_image_where('i') . ' ORDER BY i.view_count DESC, i.release_date DESC, i.updated_at DESC, i.id DESC LIMIT 120',
+                        'SELECT i.id,i.content_id,i.title,i.image_small,i.image_large,i.image_list,i.raw_json,i.affiliate_url,i.sample_movie_url_720,i.sample_movie_url_644,i.sample_movie_url_560,i.sample_movie_url_476,i.release_date,i.updated_at FROM items i INNER JOIN item_genres ig ON ig.content_id = i.content_id WHERE ig.genre_id = :id AND ' . items_product_source_where('i') . ' AND ' . pcf_home_item_image_where('i') . ' ORDER BY i.release_date DESC, i.updated_at DESC, i.id DESC LIMIT 120',
                     ] as $genreSql) {
                         $genreItems = query_all_safe($pdo, $genreSql, [':id' => (int)$genre['id']]);
                         if ($genreItems !== []) {
@@ -558,9 +557,9 @@ try {
             if ($seriesCandidates !== []) {
                 $seriesCandidates = seeded_shuffle($seriesCandidates, $seedBase + 40);
                 $picked = $seriesCandidates[0];
-                $seriesItems = query_all_safe($pdo, 'SELECT i.id,i.content_id,i.title,i.image_small,i.image_large,i.image_list,i.raw_json,i.affiliate_url,i.sample_movie_url_720,i.sample_movie_url_644,i.sample_movie_url_560,i.sample_movie_url_476,i.release_date,i.updated_at FROM items i INNER JOIN item_series isr ON isr.item_id = i.id INNER JOIN series_master s ON s.dmm_id = isr.dmm_id WHERE s.id = :id AND ' . items_product_source_where('i') . ' ORDER BY i.release_date DESC, i.updated_at DESC, i.id DESC LIMIT 120', [':id' => (int)$picked['id']]);
+                $seriesItems = query_all_safe($pdo, 'SELECT i.id,i.content_id,i.title,i.image_small,i.image_large,i.image_list,i.raw_json,i.affiliate_url,i.sample_movie_url_720,i.sample_movie_url_644,i.sample_movie_url_560,i.sample_movie_url_476,i.release_date,i.updated_at FROM items i INNER JOIN item_series isr ON isr.item_id = i.id INNER JOIN series_master s ON s.dmm_id = isr.dmm_id WHERE s.id = :id AND ' . items_product_source_where('i') . ' AND ' . pcf_home_item_image_where('i') . ' ORDER BY i.release_date DESC, i.updated_at DESC, i.id DESC LIMIT 120', [':id' => (int)$picked['id']]);
                 if ($seriesItems === [] && home_column_exists($pdo, 'item_series', 'content_id') && home_column_exists($pdo, 'item_series', 'series_id')) {
-                    $seriesItems = query_all_safe($pdo, 'SELECT i.id,i.content_id,i.title,i.image_small,i.image_large,i.image_list,i.raw_json,i.affiliate_url,i.sample_movie_url_720,i.sample_movie_url_644,i.sample_movie_url_560,i.sample_movie_url_476,i.release_date,i.updated_at FROM items i INNER JOIN item_series isr ON isr.content_id = i.content_id WHERE isr.series_id = :id AND ' . items_product_source_where('i') . ' ORDER BY i.release_date DESC, i.updated_at DESC, i.id DESC LIMIT 120', [':id' => (int)$picked['id']]);
+                    $seriesItems = query_all_safe($pdo, 'SELECT i.id,i.content_id,i.title,i.image_small,i.image_large,i.image_list,i.raw_json,i.affiliate_url,i.sample_movie_url_720,i.sample_movie_url_644,i.sample_movie_url_560,i.sample_movie_url_476,i.release_date,i.updated_at FROM items i INNER JOIN item_series isr ON isr.content_id = i.content_id WHERE isr.series_id = :id AND ' . items_product_source_where('i') . ' AND ' . pcf_home_item_image_where('i') . ' ORDER BY i.release_date DESC, i.updated_at DESC, i.id DESC LIMIT 120', [':id' => (int)$picked['id']]);
                 }
                 $seriesPool = pick_random_items($seriesItems, $seedBase + 41, 120);
                 $seriesItems = take_unique_items_for_home($seriesPool, $usedHomeItemKeys, 15);
@@ -587,9 +586,9 @@ try {
             if ($makerCandidates !== []) {
                 $makerCandidates = seeded_shuffle($makerCandidates, $seedBase + 50);
                 $picked = $makerCandidates[0];
-                $makerItems = query_all_safe($pdo, 'SELECT i.id,i.content_id,i.title,i.image_small,i.image_large,i.image_list,i.raw_json,i.affiliate_url,i.sample_movie_url_720,i.sample_movie_url_644,i.sample_movie_url_560,i.sample_movie_url_476,i.release_date,i.updated_at FROM items i INNER JOIN item_makers im ON im.item_id = i.id INNER JOIN makers m ON m.dmm_id = im.dmm_id WHERE m.id = :id AND ' . items_product_source_where('i') . ' ORDER BY i.release_date DESC, i.updated_at DESC, i.id DESC LIMIT 120', [':id' => (int)$picked['id']]);
+                $makerItems = query_all_safe($pdo, 'SELECT i.id,i.content_id,i.title,i.image_small,i.image_large,i.image_list,i.raw_json,i.affiliate_url,i.sample_movie_url_720,i.sample_movie_url_644,i.sample_movie_url_560,i.sample_movie_url_476,i.release_date,i.updated_at FROM items i INNER JOIN item_makers im ON im.item_id = i.id INNER JOIN makers m ON m.dmm_id = im.dmm_id WHERE m.id = :id AND ' . items_product_source_where('i') . ' AND ' . pcf_home_item_image_where('i') . ' ORDER BY i.release_date DESC, i.updated_at DESC, i.id DESC LIMIT 120', [':id' => (int)$picked['id']]);
                 if ($makerItems === [] && home_column_exists($pdo, 'item_makers', 'content_id') && home_column_exists($pdo, 'item_makers', 'maker_id')) {
-                    $makerItems = query_all_safe($pdo, 'SELECT i.id,i.content_id,i.title,i.image_small,i.image_large,i.image_list,i.raw_json,i.affiliate_url,i.sample_movie_url_720,i.sample_movie_url_644,i.sample_movie_url_560,i.sample_movie_url_476,i.release_date,i.updated_at FROM items i INNER JOIN item_makers im ON im.content_id = i.content_id WHERE im.maker_id = :id AND ' . items_product_source_where('i') . ' ORDER BY i.release_date DESC, i.updated_at DESC, i.id DESC LIMIT 120', [':id' => (int)$picked['id']]);
+                    $makerItems = query_all_safe($pdo, 'SELECT i.id,i.content_id,i.title,i.image_small,i.image_large,i.image_list,i.raw_json,i.affiliate_url,i.sample_movie_url_720,i.sample_movie_url_644,i.sample_movie_url_560,i.sample_movie_url_476,i.release_date,i.updated_at FROM items i INNER JOIN item_makers im ON im.content_id = i.content_id WHERE im.maker_id = :id AND ' . items_product_source_where('i') . ' AND ' . pcf_home_item_image_where('i') . ' ORDER BY i.release_date DESC, i.updated_at DESC, i.id DESC LIMIT 120', [':id' => (int)$picked['id']]);
                 }
                 $makerPool = pick_random_items($makerItems, $seedBase + 51, 120);
                 $makerItems = take_unique_items_for_home($makerPool, $usedHomeItemKeys, 15);
@@ -619,7 +618,7 @@ try {
                      INNER JOIN item_authors ia ON ia.item_id = i.id
                      INNER JOIN authors a ON a.dmm_id = ia.dmm_id
                      WHERE a.id = :id
-                       AND ' . items_product_source_where('i') . '
+                       AND ' . items_product_source_where('i') . ' AND ' . pcf_home_item_image_where('i') . '
                      ORDER BY i.release_date DESC, i.updated_at DESC, i.id DESC
                      LIMIT 120'
                 );
@@ -766,6 +765,30 @@ $hasHomeContent = $newReleaseTop !== []
 </div>
 <script>
 (() => {
+  const remainingImages = new WeakMap();
+  const retryHomeImage = (img) => {
+    if (!(img instanceof HTMLImageElement) || !img.hasAttribute('data-home-image-candidates')) return;
+    if (!img.complete || img.naturalWidth > 0) return;
+    if (!remainingImages.has(img)) {
+      let candidates = [];
+      try { candidates = JSON.parse(img.dataset.homeImageCandidates || '[]'); } catch (_) {}
+      const urls = Array.isArray(candidates) ? candidates.filter((url) => typeof url === 'string' && /^https?:\/\//i.test(url)) : [];
+      remainingImages.set(img, [...new Set(urls)].filter((url) => url !== img.getAttribute('src')).slice(0, 2));
+    }
+    const next = remainingImages.get(img).shift();
+    if (next) {
+      img.src = next;
+    } else {
+      const card = img.closest('.rail-card');
+      if (card) card.style.display = 'none';
+    }
+  };
+  // Resource errors do not bubble. Also handle errors before this script ran.
+  document.addEventListener('error', (event) => retryHomeImage(event.target), true);
+  document.querySelectorAll('img[data-home-image-candidates]').forEach((img) => {
+    if (img.complete && img.naturalWidth === 0) retryHomeImage(img);
+  });
+
   const modal = document.getElementById('sample-movie-modal');
   const frame = document.getElementById('sample-movie-frame');
   const titleNode = document.getElementById('sample-movie-title');
