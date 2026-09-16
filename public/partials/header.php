@@ -47,10 +47,12 @@ $titleText = (string)($title ?? $pageTitle ?? $siteName);
 $titleBaseText = trim($titleText);
 $isHomeTitle = $titleBaseText === '' || $titleBaseText === 'トップ' || $titleBaseText === $siteName;
 $titleText = $isHomeTitle ? ($tagline !== '' ? $siteName . ' - ' . $tagline : $siteName) : $titleBaseText . ' | ' . $siteName;
-$logoUrl = $logoPath !== '' ? public_url($logoPath) : '';
-$faviconUrl = $faviconPath !== '' ? public_versioned_url($faviconPath) : '';
+$logoUrl = site_media_public_url('logo') ?: ($logoPath !== '' ? public_url($logoPath) : '');
+$faviconUrl = site_media_public_url('favicon') ?: ($faviconPath !== '' ? public_versioned_url($faviconPath) : '');
 $faviconExt = strtolower((string)pathinfo($faviconPath, PATHINFO_EXTENSION));
 $faviconType = $faviconExt === 'png' ? 'image/png' : 'image/x-icon';
+$faviconMeta = site_media_meta_get('favicon');
+if (is_array($faviconMeta)) $faviconType = (string)$faviconMeta['mime_type'];
 $canRenderAd = function_exists('render_ad');
 $descriptionText = (string)($pageDescription ?? '');
 if ($descriptionText === '') {
@@ -60,8 +62,9 @@ $canonicalHref = isset($canonicalUrl) && is_string($canonicalUrl) && $canonicalU
 $ogUrl = isset($ogUrl) && is_string($ogUrl) && $ogUrl !== '' ? $ogUrl : ($canonicalHref !== '' ? $canonicalHref : public_url(basename((string)($_SERVER['SCRIPT_NAME'] ?? 'index.php'))));
 $ogType = isset($ogType) && is_string($ogType) && $ogType !== '' ? $ogType : 'website';
 $ogImage = isset($ogImage) && is_string($ogImage) ? trim($ogImage) : '';
-if ($ogImage === '' && $logoPath !== '') {
-    $ogImage = $logoUrl;
+if ($ogImage === '') {
+    $ogpPath = trim($safeTextSetting('site.ogp_path', ''));
+    $ogImage = site_media_public_url('ogp') ?: ($ogpPath !== '' ? public_versioned_url($ogpPath) : $logoUrl);
 }
 if ($ogImage !== '' && !str_starts_with($ogImage, 'http://') && !str_starts_with($ogImage, 'https://') && !str_starts_with($ogImage, '/')) {
     $ogImage = asset_url($ogImage);
@@ -228,7 +231,7 @@ $relNextHref = isset($relNext) && is_string($relNext) && $relNext !== '' ? $relN
 <header class="site-header">
   <div class="site-header__top">
     <div class="header-left site-header__left">
-      <?php if ($logoPath !== ''): ?>
+      <?php if ($logoUrl !== ''): ?>
         <div class="site-logo-wrap">
           <a href="<?= e(public_url('')) ?>" class="site-title-link"><img src="<?= e($logoUrl) ?>" alt="<?= e($siteName) ?>" class="site-logo"></a>
         </div>
