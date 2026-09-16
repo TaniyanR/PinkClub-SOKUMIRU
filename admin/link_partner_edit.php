@@ -44,7 +44,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
             db()->prepare('UPDATE partner_rss SET feed_url = :url, updated_at = NOW() WHERE id = :id')
                 ->execute([':url' => $rssUrl, ':id' => $rssId]);
         } elseif ($rssUrl !== '') {
-            db()->prepare('INSERT INTO partner_rss(partner_site_id,feed_url,is_enabled,show_rss,created_at,updated_at) VALUES(:sid,:url,1,1,NOW(),NOW())')
+            db()->prepare('INSERT INTO partner_rss(partner_site_id,feed_url,is_enabled,show_rss,created_at,updated_at) VALUES(:sid,:url,1,0,NOW(),NOW())')
                 ->execute([':sid' => $id, ':url' => $rssUrl]);
         }
         $message = '相互リンク情報を更新しました。';
