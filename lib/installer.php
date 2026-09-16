@@ -180,6 +180,15 @@ function installer_apply_migrations(string $dir, string $step): int
     return $count;
 }
 
+function installer_prepare_legacy_settings_table(PDO $pdo, string $stepLabel): void
+{
+    if (!db_table_exists('settings') && db_table_exists('site_settings')) {
+        $pdo->exec('RENAME TABLE site_settings TO settings');
+        db_clear_metadata_cache();
+        installer_log('step=' . $stepLabel . ' site_settings_renamed=true');
+    }
+}
+
 function installer_normalize_settings_table(PDO $pdo, string $stepLabel): void
 {
     if (!db_table_exists('settings')) {
@@ -193,8 +202,8 @@ function installer_normalize_settings_table(PDO $pdo, string $stepLabel): void
         return;
     }
 
-    $tmpTable = 'settings_kv_tmp';
-    $pdo->exec('DROP TABLE IF EXISTS `' . $tmpTable . '`');
+    $suffix = bin2hex(random_bytes(8));
+    $tmpTable = 'settings_kv_tmp_' . $suffix;
     $pdo->exec('CREATE TABLE `' . $tmpTable . '` (setting_key VARCHAR(191) PRIMARY KEY, setting_value LONGTEXT NULL, created_at DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP, updated_at DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4');
 
     $pairs = [
@@ -222,17 +231,18 @@ function installer_normalize_settings_table(PDO $pdo, string $stepLabel): void
 
     if (in_array('api_id', $columns, true)) {
         $orderBy = in_array('id', $columns, true) ? ' ORDER BY id ASC ' : '';
-        $sql = 'INSERT INTO `' . $tmpTable . '`(setting_key, setting_value, created_at, updated_at) SELECT "fanza_api_id", COALESCE(CAST(api_id AS CHAR), ""), NOW(), NOW() FROM settings' . $orderBy . 'LIMIT 1 ON DUPLICATE KEY UPDATE setting_value=VALUES(setting_value), updated_at=NOW()';
+        $sql = 'INSERT INTO `' . $tmpTable . '`(setting_key, setting_value, created_at, updated_at) SELECT "sokumiru_api_key", COALESCE(CAST(api_id AS CHAR), ""), NOW(), NOW() FROM settings' . $orderBy . 'LIMIT 1 ON DUPLICATE KEY UPDATE setting_value=VALUES(setting_value), updated_at=NOW()';
         $pdo->exec($sql);
     }
 
-    $backup = 'settings_legacy_backup';
-    $pdo->exec('DROP TABLE IF EXISTS `' . $backup . '`');
-    $pdo->exec('RENAME TABLE settings TO `' . $backup . '`, `' . $tmpTable . '` TO settings');
     if (in_array('affiliate_id', $columns, true)) {
-        $pdo->exec('ALTER TABLE `' . $backup . '` DROP COLUMN affiliate_id');
+        $orderBy = in_array('id', $columns, true) ? ' ORDER BY id ASC ' : '';
+        $pdo->exec('INSERT INTO `' . $tmpTable . '`(setting_key, setting_value) SELECT "sokumiru_affiliate_id", COALESCE(CAST(affiliate_id AS CHAR), "") FROM settings' . $orderBy . 'LIMIT 1 ON DUPLICATE KEY UPDATE setting_value=VALUES(setting_value)');
     }
-    installer_log('step=' . $stepLabel . ' settings_table_normalized=true');
+    $backup = 'settings_legacy_backup_' . $suffix;
+    $pdo->exec('RENAME TABLE settings TO `' . $backup . '`, `' . $tmpTable . '` TO settings');
+    db_clear_metadata_cache();
+    installer_log('step=' . $stepLabel . ' settings_table_normalized=true backup=' . $backup);
 }
 
 function installer_ensure_admin_user(PDO $pdo, string $stepLabel): bool
@@ -345,12 +355,17 @@ function installer_run(): array
         $step('server_connection', true);
 
         $currentStep='create_database'; installer_ensure_database_exists(); $step('create_database', true);
+        db_clear_metadata_cache();
+
+        $currentStep='prepare_legacy_settings'; installer_prepare_legacy_settings_table(db(), 'prepare_legacy_settings'); $step('prepare_legacy_settings', true);
 
         $currentStep='create_tables'; $tableCount = installer_execute_sql_file(__DIR__ . '/../sql/schema.sql', 'create_tables'); $step('create_tables', true, 'results=' . $tableCount);
-
-        $currentStep='apply_migrations'; $migrationCount = installer_apply_migrations(__DIR__ . '/../sql/migrations', 'apply_migrations'); $step('apply_migrations', true, 'count=' . $migrationCount);
+        db_clear_metadata_cache();
 
         $currentStep='normalize_settings'; installer_normalize_settings_table(db(), 'normalize_settings'); $step('normalize_settings', true);
+
+        $currentStep='apply_migrations'; $migrationCount = installer_apply_migrations(__DIR__ . '/../sql/migrations', 'apply_migrations'); $step('apply_migrations', true, 'count=' . $migrationCount);
+        db_clear_metadata_cache();
         installer_reconcile_existing_admin(db(), 'normalize_settings');
 
         $currentStep='seed_data';
