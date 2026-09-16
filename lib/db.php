@@ -125,6 +125,12 @@ function db_can_connect(): bool
 /**
  * @param PDO|string $pdoOrTable
  */
+function db_clear_metadata_cache(): void
+{
+    $GLOBALS['__db_metadata_generation'] = (int)($GLOBALS['__db_metadata_generation'] ?? 0) + 1;
+    unset($GLOBALS['__site_settings_columns']);
+}
+
 function db_table_exists($pdoOrTable, ?string $table = null): bool
 {
     static $cache = [];
@@ -137,7 +143,7 @@ function db_table_exists($pdoOrTable, ?string $table = null): bool
         }
 
         $cfg = app_config()['db'];
-        $cacheKey = (string)$cfg['dbname'] . '.' . $tableName;
+        $cacheKey = (int)($GLOBALS['__db_metadata_generation'] ?? 0) . '.' . (string)$cfg['dbname'] . '.' . $tableName;
         if (array_key_exists($cacheKey, $cache)) {
             return $cache[$cacheKey];
         }
@@ -165,7 +171,7 @@ function db_column_exists(string $table, string $column): bool
 
     try {
         $cfg = app_config()['db'];
-        $cacheKey = (string)$cfg['dbname'] . '.' . $table . '.' . $column;
+        $cacheKey = (int)($GLOBALS['__db_metadata_generation'] ?? 0) . '.' . (string)$cfg['dbname'] . '.' . $table . '.' . $column;
         if (array_key_exists($cacheKey, $cache)) {
             return $cache[$cacheKey];
         }
