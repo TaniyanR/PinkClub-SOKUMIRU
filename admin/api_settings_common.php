@@ -51,10 +51,12 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
     }
 
     if ($action === 'test_save') {
+        $testCredentialsSaved = false;
         try {
             $apiId = trim((string)post('api_id', $apiId));
             $affiliateId = trim((string)post('affiliate_id', $affiliateId));
             api_credential_set($apiType, $apiId, $affiliateId);
+            $testCredentialsSaved = true;
             $sync = sokumiru_sync_service($apiType);
 
             $s = settings_get();
@@ -109,7 +111,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
                 . ' / 次回offset: ' . (string)$nextOffset;
             $messageType = 'success';
         } catch (Throwable $e) {
-            $message = '保存に失敗しました: ' . $e->getMessage();
+            $message = ($testCredentialsSaved ? '設定は保存しましたが、商品のテスト取得・保存を完了できませんでした: ' : '設定を保存できませんでした: ') . $e->getMessage();
             $messageType = 'error';
         }
     }
@@ -237,3 +239,4 @@ require __DIR__ . '/includes/header.php';
   <?php endif; ?>
 </section>
 <?php require __DIR__ . '/includes/footer.php'; ?>
+
