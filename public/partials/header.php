@@ -4,6 +4,7 @@ declare(strict_types=1);
 require_once __DIR__ . '/_helpers.php';
 
 $pageType = function_exists('ad_current_page_type') ? ad_current_page_type() : 'home';
+$isMobileRequest = function_exists('pcf_public_request_is_mobile') && pcf_public_request_is_mobile();
 $safeTextSetting = static function (string $key, string $default = ''): string {
     if (function_exists('front_safe_text_setting')) {
         return front_safe_text_setting($key, $default);
@@ -26,6 +27,17 @@ $safeTextSetting = static function (string $key, string $default = ''): string {
 
     return $default;
 };
+$conformEmbeddedHtml = static function (string $html): string {
+    $html = preg_replace('/\s+type\s*=\s*(["\'])text\/javascript\1/i', '', $html) ?? $html;
+
+    return preg_replace_callback('/<img\b[^>]*>/i', static function (array $match): string {
+        $tag = (string)($match[0] ?? '');
+        if ($tag === '' || preg_match('/\balt\s*=/i', $tag) === 1) {
+            return $tag;
+        }
+        return preg_replace('/\s*\/?>$/', ' alt="">', $tag) ?? $tag;
+    }, $html) ?? $html;
+};
 
 $siteName = trim($safeTextSetting('site_name', ''));
 if ($siteName === '') {
@@ -40,9 +52,9 @@ $keywords = trim($safeTextSetting('site.keywords', ''));
 $logoPath = trim($safeTextSetting('site.logo_path', ''));
 $faviconPath = trim($safeTextSetting('site.favicon_path', ''));
 
-$headerAdHtml = trim($safeTextSetting('header_ad_html', ''));
-$customHeadCode = trim($safeTextSetting('site.custom_head_code', ''));
-$customBodyOpenCode = trim($safeTextSetting('site.custom_body_open_code', ''));
+$headerAdHtml = $conformEmbeddedHtml(trim($safeTextSetting('header_ad_html', '')));
+$customHeadCode = $conformEmbeddedHtml(trim($safeTextSetting('site.custom_head_code', '')));
+$customBodyOpenCode = $conformEmbeddedHtml(trim($safeTextSetting('site.custom_body_open_code', '')));
 $titleText = (string)($title ?? $pageTitle ?? $siteName);
 $titleBaseText = trim($titleText);
 $isHomeTitle = $titleBaseText === '' || $titleBaseText === 'トップ' || $titleBaseText === $siteName;
@@ -76,10 +88,31 @@ if ($headerScriptName === 'item.php' && is_int($itemIdForSocial) && $itemIdForSo
 }
 $ogImageAlt = $titleBaseText !== '' ? $titleBaseText : $siteName;
 $jsonLdText = isset($jsonLd) && is_string($jsonLd) && $jsonLd !== '' ? $jsonLd : '';
-if ($ogImage !== '' && $jsonLdText !== '') {
+if ($jsonLdText !== '') {
     $jsonLdData = json_decode($jsonLdText, true);
     if (is_array($jsonLdData) && (string)($jsonLdData['@type'] ?? '') === 'Product') {
-        $jsonLdData['image'] = $ogImage;
+        if ($ogImage !== '') {
+            $jsonLdData['image'] = $ogImage;
+        }
+        $offers = $jsonLdData['offers'] ?? null;
+        if (is_array($offers)) {
+            $hasOfferPrice = isset($offers['price']) && is_numeric($offers['price']);
+            $hasSpecificationPrice = isset($offers['priceSpecification']['price']) && is_numeric($offers['priceSpecification']['price']);
+            if (!$hasOfferPrice && !$hasSpecificationPrice) {
+                $priceMin = isset($item) && is_array($item) ? trim((string)($item['price_min'] ?? '')) : '';
+                if ($priceMin !== '' && is_numeric($priceMin) && (float)$priceMin > 0) {
+                    $jsonLdData['offers']['price'] = (float)$priceMin;
+                } else {
+                    unset($jsonLdData['offers']);
+                }
+            }
+        }
+        if (isset($item) && is_array($item)) {
+            $sku = trim((string)($item['content_id'] ?? $item['product_id'] ?? ''));
+            if ($sku !== '') {
+                $jsonLdData['sku'] = $sku;
+            }
+        }
         $encodedJsonLd = json_encode($jsonLdData, JSON_UNESCAPED_UNICODE | JSON_UNESCAPED_SLASHES | JSON_HEX_TAG | JSON_HEX_AMP);
         if (is_string($encodedJsonLd)) {
             $jsonLdText = $encodedJsonLd;
@@ -88,12 +121,16 @@ if ($ogImage !== '' && $jsonLdText !== '') {
 }
 $relPrevHref = isset($relPrev) && is_string($relPrev) && $relPrev !== '' ? $relPrev : '';
 $relNextHref = isset($relNext) && is_string($relNext) && $relNext !== '' ? $relNext : '';
+if (!headers_sent()) {
+    header('Referrer-Policy: unsafe-url', true);
+}
 ?>
 <!doctype html>
 <html lang="ja">
 <head>
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <meta name="referrer" content="unsafe-url">
   <title><?= e($titleText) ?></title>
   <?php if ($descriptionText !== ''): ?><meta name="description" content="<?= e($descriptionText) ?>"><?php endif; ?>
   <?php if (isset($robotsMeta) && is_string($robotsMeta) && trim($robotsMeta) !== ''): ?><meta name="robots" content="<?= e(trim($robotsMeta)) ?>"><?php endif; ?>
@@ -241,9 +278,9 @@ $relNextHref = isset($relNext) && is_string($relNext) && $relNext !== '' ? $relN
       <div class="site-disclaimer"><strong>当サイトはアフィリエイト広告を利用しています。</strong></div>
     </div>
     <div class="header-right site-header__right">
-      <?php if ($headerAdHtml !== '') : ?>
+      <?php if (!$isMobileRequest && $headerAdHtml !== '') : ?>
         <div class="site-ad"><?php render_deferred_ad_html($headerAdHtml, 'header_custom'); ?></div>
-      <?php elseif ($canRenderAd && (!function_exists('should_show_ad') || should_show_ad('header_left_728x90', $pageType, 'pc'))) : ?>
+      <?php elseif (!$isMobileRequest && $canRenderAd && (!function_exists('should_show_ad') || should_show_ad('header_left_728x90', $pageType, 'pc'))) : ?>
         <div class="site-ad"><?php render_ad('header_left_728x90', $pageType, 'pc'); ?></div>
       <?php endif; ?>
     </div>
@@ -260,7 +297,9 @@ $relNextHref = isset($relNext) && is_string($relNext) && $relNext !== '' ? $relN
 </div>
 <?php endif; ?>
 <div class="layout site-layout">
-  <?php require __DIR__ . '/sidebar.php'; ?>
+  <?php if (!$isMobileRequest): ?>
+    <?php require __DIR__ . '/sidebar.php'; ?>
+  <?php endif; ?>
   <main class="content site-main site-main--legacy">
     <?php $scriptName = basename((string)($_SERVER['SCRIPT_NAME'] ?? '')); ?>
     <?php $autoBreadcrumbSkip = ['item.php', 'genre.php', 'series_detail.php', 'series_one.php', 'author.php', 'maker.php', 'actress.php', 'label.php']; ?>
