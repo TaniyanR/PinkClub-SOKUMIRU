@@ -30,6 +30,7 @@ function scheduler_apply_auto_settings($pdo):void {
 $_SERVER['REQUEST_METHOD']=in_array($mode,['get','missing'],true)?'GET':'POST';
 $_POST=[];
 $code=file_get_contents(dirname(__DIR__).'/admin/api_auto.php');
+$code=preg_replace('/^declare\(strict_types=1\);$/m','',$code);
 $code=preg_replace('/^require_once .*;$/m','',$code);
 $code=preg_replace('/require __DIR__ \. \'\/includes\/(?:header|footer)\.php\';/','',$code);
 ob_start();eval('?>'.$code);$html=ob_get_clean();
@@ -42,4 +43,3 @@ if($mode==='save_fail')check(!in_array('settings',$GLOBALS['writes'],true),'no p
 if($mode==='apply_fail')check(str_contains($html,'設定値は保存されましたが'),'partial save explicitly shown');
 if($mode==='save')check($GLOBALS['writes']===['prepare','seed','settings','apply']&&str_contains($html,'自動設定を保存しました。'),'successful save');
 echo 'PASS '.$mode."\n";
-
