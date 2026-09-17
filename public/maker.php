@@ -115,24 +115,14 @@ require __DIR__ . '/partials/header.php';
   <?php pcf_render_empty('このメーカーの商品はありません。'); ?>
 <?php endif; ?>
 
-<?php pcf_render_item_access_ranking(
+<?php pcf_render_entity_access_ranking(
+    '人気のメーカーランキング',
     $accessRankingTabs,
     $accessRankingPeriod,
-    static function (string $period) use ($id): string {
-        return public_url('maker.php') . '?' . http_build_query([
-            'id' => $id,
-            'rank_period' => $period,
-        ]) . '#access-ranking';
-    },
+    static fn(string $period): string => public_url('maker.php') . '?id=' . rawurlencode((string)$id) . '&rank_period=' . rawurlencode($period) . '#access-ranking',
     $accessRankingRows,
-    static function (array $rankingRow): string {
-        $rankingId = (int)($rankingRow['id'] ?? 0);
-        return $rankingId > 0
-            ? public_url('maker.php') . '?id=' . rawurlencode((string)$rankingId)
-            : '';
-    },
-    '人気のメーカーランキングのデータがありません。',
-    '人気のメーカーランキング'
+    static fn(array $rankingRow): string => public_url('maker.php') . '?id=' . rawurlencode((string)($rankingRow['id'] ?? '')),
+    '人気のメーカーランキングのデータがありません。'
 ); ?>
 
 <?php pcf_render_sample_movie_modal(); ?>

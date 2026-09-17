@@ -147,24 +147,14 @@ require __DIR__ . '/partials/header.php';
   <?php pcf_render_empty('このジャンルに紐づく商品はまだありません。'); ?>
 <?php endif; ?>
 
-<?php pcf_render_item_access_ranking(
+<?php pcf_render_entity_access_ranking(
+    '人気のジャンルランキング',
     $accessRankingTabs,
     $accessRankingPeriod,
-    static function (string $period) use ($row): string {
-        return public_url('genre.php') . '?' . http_build_query([
-            'id' => (int)$row['id'],
-            'rank_period' => $period,
-        ]) . '#access-ranking';
-    },
+    static fn(string $period): string => public_url('genre.php') . '?' . http_build_query(['id' => (int)$row['id'], 'rank_period' => $period]) . '#access-ranking',
     $accessRankingRows,
-    static function (array $rankingRow): string {
-        $rankingId = (int)($rankingRow['id'] ?? 0);
-        return $rankingId > 0
-            ? public_url('genre.php') . '?id=' . rawurlencode((string)$rankingId)
-            : '';
-    },
-    '人気のジャンルランキングのデータがありません。',
-    '人気のジャンルランキング'
+    static fn(array $rankingRow): string => public_url('genre.php') . '?id=' . rawurlencode((string)($rankingRow['id'] ?? '')),
+    '人気のジャンルランキングのデータがありません。'
 ); ?>
 
 <?php pcf_render_sample_movie_modal(); ?>

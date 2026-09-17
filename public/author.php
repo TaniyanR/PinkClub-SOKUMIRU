@@ -71,20 +71,21 @@ $list = dedupe_items_by_key($list);
 $oldestItem = pcf_pick_oldest_item($list);
 $oldestImage = pcf_item_image(is_array($oldestItem) ? $oldestItem : []);
 
-$title = (string)($row['name'] ?? '作者詳細');
-$pageDescription = mb_strimwidth($title . 'の関連作品一覧です。', 0, 150, '…', 'UTF-8');
-$canonicalUrl = public_url('author.php?id=' . $id);
+$authorName = trim((string)($row['name'] ?? ''));
+$title = $authorName !== '' ? $authorName : '作者詳細';
+$pageDescription = mb_strimwidth($title . 'の関連作品一覧。SOKUMIRUで取り扱う関連作品を紹介。', 0, 150, '…', 'UTF-8');
+$canonicalUrl = public_url('author.php') . '?id=' . rawurlencode((string)$id);
 require __DIR__ . '/partials/header.php';
 ?>
 <?php pcf_render_breadcrumbs([
     ['label' => 'トップ', 'url' => public_url('index.php')],
-    ['label' => (string)($row['name'] ?? '作者詳細')],
+    ['label' => $title],
 ]); ?>
 
 <section class="pcf-topic-head">
-  <img class="pcf-topic-head__image" src="<?= e($oldestImage) ?>" alt="<?= e((string)($row['name'] ?? '')) ?>">
+  <?php if ($oldestImage !== ''): ?><img class="pcf-topic-head__image" src="<?= e($oldestImage) ?>" alt="<?= e($authorName) ?>" loading="lazy" decoding="async"><?php endif; ?>
   <div>
-    <h1 class="pcf-hero__title"><?= e((string)($row['name'] ?? '作者詳細')) ?></h1>
+    <h1 class="pcf-hero__title"><?= e($title) ?></h1>
     <?php if (!empty($row['ruby'])): ?><p class="pcf-list-card__meta">読み: <?= e((string)$row['ruby']) ?></p><?php endif; ?>
     <p class="pcf-list-card__meta">関連作品: <?= e((string)count($list)) ?>件</p>
   </div>
@@ -92,7 +93,7 @@ require __DIR__ . '/partials/header.php';
 
 <h2 class="pcf-section-title">関連商品</h2>
 <?php if ($list !== []): ?>
-  <section class="pcf-related-grid">
+  <section class="pcf-related-grid" style="grid-template-columns:repeat(auto-fit,minmax(min(240px,100%),1fr));">
     <?php foreach ($list as $item): pcf_render_item_card(is_array($item) ? $item : []); endforeach; ?>
   </section>
 <?php else: ?>

@@ -126,7 +126,7 @@ function pcf_public_page_cache_start(int $ttlSeconds = 120): void
     }
     $cacheGeneration = $scriptName === 'item.php' ? 'v4-social-card' : 'v3';
     if ($scriptName === 'index.php') {
-        $cacheGeneration = 'v5-home-taxonomy-wrap';
+        $cacheGeneration = 'v6-home-section-layout';
     }
     $cacheKey = hash('sha256', $cacheGeneration . '|' . $cacheAuthority . '|' . $variant . '|' . $normalizedRequestUri);
     $cacheFile = $cacheDirectory . '/' . $cacheKey . '.html';
@@ -236,4 +236,3 @@ function pcf_public_page_cache_start(int $ttlSeconds = 120): void
         }
     });
 }
-

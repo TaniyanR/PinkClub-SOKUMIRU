@@ -88,7 +88,7 @@ require __DIR__ . '/includes/header.php';
   <?php if($message): ?><p class="flash success"><?= e($message) ?></p><?php endif; ?>
   <form method="post" style="max-width:760px;"><?= csrf_input() ?><input type="hidden" name="action" value="create">
     <label>サイト名<input name="name" required></label><label>URL<input name="url" type="url" required></label><label>RSS URL<input name="rss_url" type="url"></label>
-    <label><input type="checkbox" name="show_link" value="1" checked> 相互リンクを表示する</label><label><input type="checkbox" name="rel_nofollow" value="1" <?= !$partnerNofollowSupported ? 'disabled' : '' ?>> rel="nofollow"</label><label><input type="checkbox" name="show_rss" value="1" checked> RSSを表示する</label>
+    <label><input type="checkbox" name="show_link" value="1" checked> 相互リンクを表示する</label><label><input type="checkbox" name="rel_nofollow" value="1" <?= !$partnerNofollowSupported ? 'disabled' : '' ?>> rel="nofollow"</label><label><input type="checkbox" name="show_rss" value="1"> RSSを表示する</label>
     <fieldset><legend>表示順</legend><label><input type="radio" name="sort_mode" value="registered" <?= $sortMode!=='kana'?'checked':'' ?>> 登録順</label><label><input type="radio" name="sort_mode" value="kana" <?= $sortMode==='kana'?'checked':'' ?>> あいうえお順</label></fieldset>
     <div class="admin-actions"><button type="submit">追加</button></div>
   </form>

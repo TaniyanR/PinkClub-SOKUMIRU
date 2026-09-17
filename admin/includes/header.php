@@ -43,6 +43,26 @@ $menuGroups = array_values(array_filter(
         && basename((string)($group['file'] ?? '')) !== 'deletion_requests.php'
 ));
 
+$adminMenuItemIsActive = static function (string $target) use ($currentScript): bool {
+    $path = (string)(parse_url($target, PHP_URL_PATH) ?: $target);
+    if ($currentScript !== basename($path)) {
+        return false;
+    }
+    $query = (string)(parse_url($target, PHP_URL_QUERY) ?: '');
+    if ($query === '') {
+        return true;
+    }
+    $expected = [];
+    parse_str($query, $expected);
+    foreach ($expected as $key => $value) {
+        $actual = $_GET[$key] ?? null;
+        if (is_array($value) || is_array($actual) || (string)$actual !== (string)$value) {
+            return false;
+        }
+    }
+    return true;
+};
+
 $flash = function_exists('flash_get') ? flash_get() : null;
 $titleText = (string)($title ?? APP_NAME);
 $faviconPath = trim(site_setting_get('site.favicon_path', ''));
@@ -63,6 +83,8 @@ if (is_array($faviconMeta)) $faviconType = (string)$faviconMeta['mime_type'];
     <link rel="apple-touch-icon" href="<?= e($faviconUrl) ?>">
   <?php endif; ?>
   <link rel="stylesheet" href="<?= e(asset_url('css/style.css')) ?>">
+  <link rel="stylesheet" href="<?= e(asset_url('css/admin-enhancements.css')) ?>">
+  <?php if ($currentScript === 'analytics.php'): ?><script src="<?= e(asset_url('js/admin-analytics.js')) ?>" defer></script><?php endif; ?>
 </head>
 <body class="admin-page">
 <input class="admin-menu-toggle" type="checkbox" id="admin-menu-toggle" hidden>
@@ -87,7 +109,7 @@ if (is_array($faviconMeta)) $faviconType = (string)$faviconMeta['mime_type'];
             <?php
             $isGroupActive = false;
             foreach ($group['children'] as $item) {
-                if ($currentScript === basename((string)$item['file'])) {
+                if ($adminMenuItemIsActive((string)$item['file'])) {
                     $isGroupActive = true;
                     break;
                 }
@@ -97,13 +119,13 @@ if (is_array($faviconMeta)) $faviconType = (string)$faviconMeta['mime_type'];
               <details <?= $isGroupActive ? 'open' : '' ?>>
                 <summary class="admin-menu__link"><?= e((string)$group['label']) ?></summary>
                 <ul class="admin-sidebar__list admin-menu__child">
-                  <?php foreach ($group['children'] as $item): $isActive = ($currentScript === basename((string)$item['file'])); ?>
+                  <?php foreach ($group['children'] as $item): $isActive = $adminMenuItemIsActive((string)$item['file']); ?>
                     <li><a class="admin-menu__link <?= $isActive ? 'is-active' : '' ?>" href="<?= e(admin_url((string)$item['file'])) ?>"><?= e((string)$item['label']) ?></a></li>
                   <?php endforeach; ?>
                 </ul>
               </details>
             </li>
-          <?php else: $isActive = ($currentScript === basename((string)$group['file'])); ?>
+          <?php else: $isActive = $adminMenuItemIsActive((string)$group['file']); ?>
             <li><a class="admin-menu__link <?= $isActive ? 'is-active' : '' ?>" href="<?= e(admin_url((string)$group['file'])) ?>"><?= e((string)$group['label']) ?></a></li>
           <?php endif; ?>
         <?php endforeach; ?>

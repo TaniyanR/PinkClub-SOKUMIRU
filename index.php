@@ -499,7 +499,7 @@ try {
         if (db_table_exists($pdo, 'actresses')) {
             $actresses = pcf_home_rotation_current_set($homeRotationCache, 'actresses');
             $actresses = take_unique_actresses_for_home($actresses);
-            if (count($actresses) < 15) {
+            if ($actresses === []) {
                 $actressCandidates = $pdo->query('SELECT id,name,image_small,image_large,image_url FROM actresses ORDER BY updated_at DESC,id DESC LIMIT 60')->fetchAll();
                 $actresses = take_unique_actresses_for_home(array_merge($actresses, $actressCandidates ?: []));
             }
@@ -675,7 +675,7 @@ $hasHomeContent = $newReleaseTop !== []
   <section class="rail-section only-pc home-feature-section">
     <h2>新作作品</h2>
     <div class="rail-row rail-row--210 rail-row--no-scroll rail-row--top-shift rail-row--between-gap"><?php foreach ($newReleaseTop as $item) { render_item_card($item, 210, null, false, false); } ?></div>
-    <div class="rail-row rail-row--200 rail-row--wide-thumb rail-row--home-taxonomy"><?php foreach ($newReleaseBottom as $item) { render_item_card($item, 200, null, true); } ?></div>
+    <div class="rail-row rail-row--200 rail-row--wide-thumb rail-row--bottom-scroll rail-row--bottom-horizontal rail-row--home-feature-bottom"><?php foreach ($newReleaseBottom as $item) { render_item_card($item, 200, null, true); } ?></div>
   </section>
   <section class="rail-section only-sp">
     <h2>新作作品</h2>
@@ -685,7 +685,7 @@ $hasHomeContent = $newReleaseTop !== []
   <section class="rail-section only-pc home-feature-section">
     <h2>新着作品</h2>
     <div class="rail-row rail-row--210 rail-row--no-scroll rail-row--top-shift rail-row--between-gap"><?php foreach ($latestTop as $item) { render_item_card($item, 210, null, false, false); } ?></div>
-    <div class="rail-row rail-row--200 rail-row--wide-thumb rail-row--home-taxonomy"><?php foreach ($latestBottom as $item) { render_item_card($item, 200, null, true); } ?></div>
+    <div class="rail-row rail-row--200 rail-row--wide-thumb rail-row--bottom-scroll rail-row--bottom-horizontal rail-row--home-feature-bottom"><?php foreach ($latestBottom as $item) { render_item_card($item, 200, null, true); } ?></div>
   </section>
   <section class="rail-section only-sp">
     <h2>新着作品</h2>
@@ -695,7 +695,7 @@ $hasHomeContent = $newReleaseTop !== []
   <section class="rail-section only-pc home-feature-section">
     <h2>ピックアップ</h2>
     <div class="rail-row rail-row--210 rail-row--no-scroll rail-row--top-shift rail-row--between-gap"><?php foreach ($pickupTop as $item) { render_item_card($item, 210, null, false, false); } ?></div>
-    <div class="rail-row rail-row--200 rail-row--wide-thumb rail-row--home-taxonomy"><?php foreach ($pickupBottom as $item) { render_item_card($item, 200, null, true); } ?></div>
+    <div class="rail-row rail-row--200 rail-row--wide-thumb rail-row--bottom-scroll rail-row--bottom-horizontal rail-row--home-feature-bottom"><?php foreach ($pickupBottom as $item) { render_item_card($item, 200, null, true); } ?></div>
   </section>
   <section class="rail-section only-sp">
     <h2>ピックアップ</h2>

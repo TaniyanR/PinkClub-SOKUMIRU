@@ -41,6 +41,7 @@ foreach ($kanaOrder as $kana) {
     $kanaGroups[$kana] = [];
 }
 $alphaGroups = [];
+$otherRows = [];
 
 $resolveIndex = static function (array $row): array {
     $name = trim((string)($row['name'] ?? ''));
@@ -48,7 +49,7 @@ $resolveIndex = static function (array $row): array {
     $base = $ruby !== '' ? $ruby : $name;
     $ch = mb_substr($base, 0, 1);
     if ($ch === '') {
-        return ['type' => 'none', 'key' => ''];
+        return ['type' => 'other', 'key' => ''];
     }
     $h = mb_convert_kana($ch, 'c', 'UTF-8');
     if (preg_match('/^[ぁ-お]/u', $h)) { return ['type' => 'kana', 'key' => 'あ']; }
@@ -62,7 +63,7 @@ $resolveIndex = static function (array $row): array {
     if (preg_match('/^[ら-ろ]/u', $h)) { return ['type' => 'kana', 'key' => 'ら']; }
     if (preg_match('/^[わ-ん]/u', $h)) { return ['type' => 'kana', 'key' => 'わ']; }
     if (preg_match('/^[A-Za-z]/', $ch)) { return ['type' => 'alpha', 'key' => strtoupper($ch)]; }
-    return ['type' => 'none', 'key' => ''];
+    return ['type' => 'other', 'key' => ''];
 };
 
 foreach ($displayRows as $label) {
@@ -73,7 +74,9 @@ foreach ($displayRows as $label) {
     }
     if ($idx['type'] === 'alpha') {
         $alphaGroups[$idx['key']][] = $label;
+        continue;
     }
+    $otherRows[] = $label;
 }
 
 $sortByName = static function (array &$list): void {
@@ -85,6 +88,7 @@ foreach ($kanaGroups as &$groupRows) {
     $sortByName($groupRows);
 }
 unset($groupRows);
+$sortByName($otherRows);
 ksort($alphaGroups);
 foreach ($alphaGroups as &$groupRows) {
     $sortByName($groupRows);
@@ -92,7 +96,7 @@ foreach ($alphaGroups as &$groupRows) {
 unset($groupRows);
 
 $pageTitle = 'レーベル一覧';
-$pageDescription = 'レーベル一覧ページです。';
+$pageDescription = 'SOKUMIRUのレーベル一覧。レーベル名から関連作品を探せます。';
 $canonicalUrl = canonical_url('/labels.php');
 
 include __DIR__ . '/partials/header.php';
@@ -106,8 +110,8 @@ include __DIR__ . '/partials/header.php';
       <section class="pcf-index-block">
         <h2 class="pcf-section-title"><?= e($kana) ?>行</h2>
         <div class="pcf-list-card__meta pcf-chip-list">
-          <?php foreach ($groupRows as $i => $label): ?>
-            <a class="pcf-chip" href="<?= e(public_url('label.php') . '?' . http_build_query(['id' => (string)($label['id'] ?? ''), 'name' => (string)($label['name'] ?? '')])) ?>"><?= e((string)($label['name'] ?? '')) ?></a>
+          <?php foreach ($groupRows as $label): ?>
+            <a class="pcf-chip" href="<?= e(public_url('label.php') . '?' . http_build_query(['id' => (string)($label['id'] ?? '')])) ?>"><?= e((string)($label['name'] ?? '')) ?></a>
           <?php endforeach; ?>
         </div>
       </section>
@@ -118,11 +122,21 @@ include __DIR__ . '/partials/header.php';
         <?php foreach ($alphaGroups as $letter => $groupRows): ?>
           <div class="pcf-list-card__meta pcf-chip-list">
             <strong><?= e($letter) ?></strong>
-            <?php foreach ($groupRows as $i => $label): ?>
-              <a class="pcf-chip" href="<?= e(public_url('label.php') . '?' . http_build_query(['id' => (string)($label['id'] ?? ''), 'name' => (string)($label['name'] ?? '')])) ?>"><?= e((string)($label['name'] ?? '')) ?></a>
+            <?php foreach ($groupRows as $label): ?>
+              <a class="pcf-chip" href="<?= e(public_url('label.php') . '?' . http_build_query(['id' => (string)($label['id'] ?? '')])) ?>"><?= e((string)($label['name'] ?? '')) ?></a>
             <?php endforeach; ?>
           </div>
         <?php endforeach; ?>
+      </section>
+    <?php endif; ?>
+    <?php if ($otherRows !== []): ?>
+      <section class="pcf-index-block">
+        <h2 class="pcf-section-title">その他</h2>
+        <div class="pcf-list-card__meta pcf-chip-list">
+          <?php foreach ($otherRows as $label): ?>
+            <a class="pcf-chip" href="<?= e(public_url('label.php') . '?' . http_build_query(['id' => (string)($label['id'] ?? '')])) ?>"><?= e((string)($label['name'] ?? '')) ?></a>
+          <?php endforeach; ?>
+        </div>
       </section>
     <?php endif; ?>
   </div>
