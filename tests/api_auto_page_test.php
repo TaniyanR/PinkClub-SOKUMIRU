@@ -43,3 +43,4 @@ if($mode==='save_fail')check(!in_array('settings',$GLOBALS['writes'],true),'no p
 if($mode==='apply_fail')check(str_contains($html,'設定値は保存されましたが'),'partial save explicitly shown');
 if($mode==='save')check($GLOBALS['writes']===['prepare','seed','settings','apply']&&str_contains($html,'自動設定を保存しました。'),'successful save');
 echo 'PASS '.$mode."\n";
+
