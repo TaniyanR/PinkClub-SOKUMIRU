@@ -23,13 +23,15 @@ CREATE TABLE IF NOT EXISTS indexnow_item_state (
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4;
 
 -- Cover the timestamp-range aggregates without rebuilding or deleting event data.
+SET @table_exists := (SELECT COUNT(*) FROM information_schema.TABLES WHERE TABLE_SCHEMA=DATABASE() AND TABLE_NAME='page_views');
 SET @idx_exists := (SELECT COUNT(*) FROM information_schema.STATISTICS WHERE TABLE_SCHEMA=DATABASE() AND TABLE_NAME='page_views' AND INDEX_NAME='idx_page_views_date_item');
-SET @idx_sql := IF(@idx_exists=0, 'CREATE INDEX idx_page_views_date_item ON page_views(viewed_at,item_id)', 'SELECT 1');
+SET @idx_sql := IF(@table_exists=1 AND @idx_exists=0, 'CREATE INDEX idx_page_views_date_item ON page_views(viewed_at,item_id)', 'SELECT 1');
 PREPARE idx_stmt FROM @idx_sql;
 EXECUTE idx_stmt;
 DEALLOCATE PREPARE idx_stmt;
+SET @table_exists := (SELECT COUNT(*) FROM information_schema.TABLES WHERE TABLE_SCHEMA=DATABASE() AND TABLE_NAME='item_out_click_daily');
 SET @idx_exists := (SELECT COUNT(*) FROM information_schema.STATISTICS WHERE TABLE_SCHEMA=DATABASE() AND TABLE_NAME='item_out_click_daily' AND INDEX_NAME='idx_item_out_clicked_item');
-SET @idx_sql := IF(@idx_exists=0, 'CREATE INDEX idx_item_out_clicked_item ON item_out_click_daily(clicked_at,item_id)', 'SELECT 1');
+SET @idx_sql := IF(@table_exists=1 AND @idx_exists=0, 'CREATE INDEX idx_item_out_clicked_item ON item_out_click_daily(clicked_at,item_id)', 'SELECT 1');
 PREPARE idx_stmt FROM @idx_sql;
 EXECUTE idx_stmt;
 DEALLOCATE PREPARE idx_stmt;
