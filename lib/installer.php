@@ -47,6 +47,9 @@ function installer_log_tail(int $maxLines = 20): array
 
 function installer_user_error_message(Throwable $exception): string
 {
+    if ($exception->getPrevious() instanceof PDOException || $exception instanceof PDOException) {
+        return db_connection_error_message($exception);
+    }
     $message = $exception->getMessage();
     if (str_contains($message, 'SQLSTATE[HY000] [2002]')) return 'MySQLサーバーへ接続できません。DBホスト名・DBポート・ユーザー名・パスワードを確認してください。';
     if (str_contains($message, 'Access denied')) return 'DBユーザー認証に失敗しました。config/config.php の設定を確認してください。';
@@ -75,6 +78,10 @@ function installer_can_connect_server(): bool { try { db_server_pdo(); return tr
 
 function installer_ensure_database_exists(): void
 {
+    // Shared hosting normally supplies an existing DB and grants rights only to it.
+    if (db_can_connect()) {
+        return;
+    }
     $cfg = app_config()['db'];
     $dbname = (string)$cfg['dbname'];
     $stmt = db_server_pdo()->prepare('SELECT SCHEMA_NAME FROM INFORMATION_SCHEMA.SCHEMATA WHERE SCHEMA_NAME = :dbname LIMIT 1');
@@ -146,6 +153,9 @@ function installer_execute_sql_file(string $path, string $step): int
         throw $e;
     } finally {
         $mysqli->close();
+        // schema.sql and migrations can create columns/tables checked earlier
+        // in this same setup request, including after a partially failed run.
+        db_reset_schema_cache();
     }
 }
 
@@ -288,13 +298,9 @@ function installer_ensure_settings_row(PDO $pdo, string $stepLabel): bool
 
 function installer_status(): array
 {
-    $status = ['server_connection'=>false,'db_connection'=>false,'admins_table'=>false,'settings_table'=>false,'auth_schema'=>false,'admin_user'=>false,'settings_row'=>false,'completed'=>false];
-    $status['server_connection'] = installer_can_connect_server();
-    if (!$status['server_connection']) {
-        $status['completed'] = false;
-        return $status;
-    }
+    $status = ['server_connection'=>false,'db_connection'=>false,'admins_table'=>false,'settings_table'=>false,'admin_user'=>false,'settings_row'=>false,'completed'=>false];
     $status['db_connection'] = db_can_connect();
+    $status['server_connection'] = $status['db_connection'] || installer_can_connect_server();
     if (!$status['db_connection']) {
         $status['completed'] = false;
         return $status;
@@ -351,7 +357,9 @@ function installer_run(): array
     try {
         installer_clear_last_error();
         unset($GLOBALS['installer_last_failed_sql']);
-        if (!installer_can_connect_server()) throw new RuntimeException('MySQLサーバーに接続できません。');
+        if (!db_can_connect()) {
+            db_server_pdo();
+        }
         $step('server_connection', true);
 
         $currentStep='create_database'; installer_ensure_database_exists(); $step('create_database', true);

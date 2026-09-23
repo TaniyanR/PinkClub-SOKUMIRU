@@ -3,6 +3,7 @@ declare(strict_types=1);
 
 require_once __DIR__ . '/_bootstrap.php';
 require_once __DIR__ . '/../lib/repository.php';
+require_once __DIR__ . '/../lib/images.php';
 require_once __DIR__ . '/../lib/public_rankings.php';
 require_once __DIR__ . '/partials/public_ui.php';
 
@@ -116,7 +117,6 @@ function item_large_sample_image_url(string $url): string
     $query = isset($parts['query']) && $parts['query'] !== '' ? '?' . $parts['query'] : '';
     return $scheme . '://' . $host . $port . '/image/capture/ol_' . $matches[1] . $query;
 }
-
 function item_collect_sample_image_urls(mixed $value, array &$images): void
 {
     if (is_string($value)) {
@@ -271,6 +271,9 @@ function item_unique_rows(array $rows, array $keys): array
     return $unique;
 }
 
+foreach (['id','cid','content_id'] as $inputKey) {
+    if (isset($_GET[$inputKey]) && !is_string($_GET[$inputKey])) require __DIR__ . '/404.php';
+}
 $id = (int)get('id', 0);
 $contentId = trim((string)get('content_id', ''));
 $cid = trim((string)get('cid', ''));
@@ -279,6 +282,7 @@ if ($contentId === '' && $cid !== '') {
     $contentId = $cid;
 }
 
+require_once __DIR__ . '/../lib/search_lifecycle.php';
 $item = false;
 try {
     if ($id > 0) {
@@ -297,11 +301,18 @@ try {
     } elseif ($contentId !== '') {
         $item = fetch_item_by_content_id($contentId);
     }
-} catch (Throwable) {
-    $item = false;
+} catch (Throwable $e) {
+    error_log('Item lookup failed: ' . $e->getMessage());
+    pcf_search_error(503);
 }
 
 if (!$item) {
+    try {
+        if (pcf_item_is_gone($id, normalize_content_id($contentId))) pcf_search_error(410);
+    } catch (Throwable $e) {
+        error_log('Item status lookup failed: ' . $e->getMessage());
+        pcf_search_error(503);
+    }
     require __DIR__ . '/404.php';
 }
 
@@ -437,8 +448,8 @@ if ($sampleImagesSmall === []) {
 
 $sampleImagesLarge = array_values(array_unique(array_map('item_large_sample_image_url', $sampleImagesLarge)));
 $sampleImagesSmall = array_values(array_unique($sampleImagesSmall));
-$sampleImagesLarge = array_values(array_filter(array_slice($sampleImagesLarge, 0, 24), static fn($url) => !pcf_is_self_hosted_fanza_image_url((string)$url)));
-$sampleImagesSmall = array_values(array_filter(array_slice($sampleImagesSmall, 0, 24), static fn($url) => !pcf_is_self_hosted_fanza_image_url((string)$url)));
+$sampleImagesLarge = array_values(array_filter(array_slice($sampleImagesLarge, 0, 24), static fn($url) => !pcf_is_self_hosted_product_image_url((string)$url)));
+$sampleImagesSmall = array_values(array_filter(array_slice($sampleImagesSmall, 0, 24), static fn($url) => !pcf_is_self_hosted_product_image_url((string)$url)));
 $sampleImagesSmallLargeMap = [];
 $sampleImageCount = max(count($sampleImagesLarge), count($sampleImagesSmall));
 for ($i = 0; $i < $sampleImageCount; $i++) {
@@ -643,14 +654,20 @@ if ($productIdDisplay === '') {
     $productIdDisplay = trim((string)($raw['product_id'] ?? ''));
 }
 $packageImage = pcf_item_image(is_array($item) ? $item : []);
-if (str_starts_with($packageImage, 'data:image/svg+xml') || pcf_is_self_hosted_fanza_image_url($packageImage)) {
+if (str_starts_with($packageImage, 'data:image/svg+xml') || pcf_is_self_hosted_product_image_url($packageImage)) {
     $packageImage = '';
 }
 
 $actressNames = array_values(array_filter(array_map(static fn($row) => trim((string)($row['name'] ?? '')), $actresses), static fn($name) => $name !== ''));
 $genreNames = array_values(array_filter(array_map(static fn($row) => trim((string)($row['name'] ?? '')), $genres), static fn($name) => $name !== ''));
-$pageDescriptionSource = $desc !== '' ? $desc : $title . 'のSOKUMIRU通販ページ。' . ($actressNames !== [] ? implode('、', array_slice($actressNames, 0, 3)) . '出演、' : '') . ($genreNames !== [] ? implode('、', array_slice($genreNames, 0, 3)) . '作品です。' : '作品です。');
-$pageDescription = mb_strimwidth($pageDescriptionSource, 0, 150, '…', 'UTF-8');
+require_once __DIR__ . '/../lib/seo_metadata.php';
+$makerNames = array_values(array_filter(array_map(static fn($row) => trim((string)($row['name'] ?? '')), $makers)));
+$pageDescriptionSource = $title . 'の作品情報。'
+    . ($actressNames !== [] ? '出演：' . implode('、', array_slice($actressNames, 0, 3)) . '。' : '')
+    . ($makerNames !== [] ? 'メーカー：' . implode('、', array_slice($makerNames, 0, 2)) . '。' : '')
+    . ($genreNames !== [] ? 'ジャンル：' . implode('、', array_slice($genreNames, 0, 3)) . '。' : '')
+    . $desc;
+$pageDescription = pcf_meta_description($pageDescriptionSource, $title, 'item.php', site_title_setting('PinkClub SOKUMIRU'));
 $canonicalUrl = public_url('item.php') . '?id=' . rawurlencode((string)(int)$item['id']);
 $ogImage = $packageImage;
 if ($ogImage !== '' && str_starts_with($ogImage, '//')) {
@@ -662,6 +679,12 @@ $productJsonLd = [
     '@type' => 'Product',
     'name' => $title,
     'description' => $pageDescription,
+    'offers' => [
+        '@type' => 'Offer',
+        'url' => $affiliateUrl !== '' ? $affiliateUrl : $canonicalUrl,
+        'priceCurrency' => 'JPY',
+        'availability' => 'https://schema.org/InStock',
+    ],
 ];
 if ($ogImage !== '') {
     $productJsonLd['image'] = $ogImage;
@@ -669,6 +692,8 @@ if ($ogImage !== '') {
 if ($actressNames !== []) {
     $productJsonLd['actor'] = array_map(static fn($name) => ['@type' => 'Person', 'name' => $name], $actressNames);
 }
+$videoJsonLd = pcf_video_object($title, $pageDescription, $ogImage, $sampleMovieUrl, (string)($raw['sampleMovieURL']['uploadDate'] ?? ''));
+if ($videoJsonLd !== null) $productJsonLd['subjectOf'] = $videoJsonLd;
 $jsonLd = (string)json_encode($productJsonLd, JSON_UNESCAPED_UNICODE | JSON_UNESCAPED_SLASHES | JSON_HEX_TAG | JSON_HEX_AMP);
 
 $accessRankingPeriod = trim((string)get('rank_period', 'daily'));
@@ -683,6 +708,7 @@ if (!isset($accessRankingTabs[$accessRankingPeriod])) {
 }
 $accessRankingRows = pcf_public_weighted_ranking('items', $accessRankingPeriod);
 
+$recentFrontCover = item_front_cover_url($item);
 require __DIR__ . '/partials/header.php';
 ?>
 <?php pcf_render_breadcrumbs([
@@ -691,13 +717,14 @@ require __DIR__ . '/partials/header.php';
     ['label' => $breadcrumbTitle, 'url' => $canonicalUrl],
 ]); ?>
 
-<article>
+<article data-recent-front-cover="<?= e($recentFrontCover) ?>">
   <h1 class="pcf-hero__title pcf-item-title"><?= e($breadcrumbTitle) ?></h1>
 
-  <div class="pcf-item-samples" style="display:flex; gap:8px; align-items:flex-start; flex-wrap:nowrap;">
+  <?php if ($sampleMovieUrl !== '' || $sampleImagesSmallLargeMap !== []): ?>
+    <div class="pcf-item-samples" style="display:flex; gap:8px; align-items:flex-start; flex-wrap:nowrap;">
       <?php if ($sampleMovieUrl !== ''): ?>
       <div class="sample-movie-modal__frame-wrap pcf-item-sample-movie" style="width: min(720px, calc(100% - 400px)); max-width: 100%; aspect-ratio: 720 / 480;">
-        <iframe class="sample-movie-modal__frame" src="<?= e($sampleMovieUrl) ?>" allow="autoplay; fullscreen" referrerpolicy="no-referrer" scrolling="no" width="720" height="480"></iframe>
+        <iframe class="sample-movie-modal__frame" src="<?= e($sampleMovieUrl) ?>" allow="autoplay; fullscreen" referrerpolicy="no-referrer" width="720" height="480"></iframe>
       </div>
       <?php else: ?>
       <div class="sample-movie-modal__frame-wrap pcf-item-sample-movie" style="width: min(720px, calc(100% - 400px)); max-width: 100%; aspect-ratio: 720 / 480; background:#d9d9d9; color:#666; display:flex; align-items:center; justify-content:center; font-weight:700;">no movie</div>
@@ -711,12 +738,12 @@ require __DIR__ . '/partials/header.php';
         <?php endforeach; ?>
       </div></div>
       <?php endif; ?>
-  </div>
+    </div>
+  <?php endif; ?>
 
   <?php if ($affiliateUrl !== ''): ?>
     <p><a class="pcf-btn" style="display:block; text-align:center; border:2px solid #9aa0ab; font-weight:700; font-size:18px; padding:12px 14px;" href="<?= e($affiliateOutUrl) ?>" target="_blank" rel="noopener sponsored nofollow">購入ボタン</a></p>
   <?php endif; ?>
-
   <section class="pcf-detail pcf-item-main">
     <div class="pcf-item-main__media" style="width:min(100%, 620px);">
       <?php if ($packageImage !== ''): ?>
@@ -783,7 +810,6 @@ require __DIR__ . '/partials/header.php';
           return $itemId > 0 ? public_url('item.php') . '?id=' . rawurlencode((string)$itemId) : '';
       }
   ); ?>
-
 </article>
 
 <div id="pcf-image-viewer-modal" style="display:none; position:fixed; inset:0; background:rgba(0,0,0,0.92); z-index:1200;">

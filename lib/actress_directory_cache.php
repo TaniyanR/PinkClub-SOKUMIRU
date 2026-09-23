@@ -4,7 +4,7 @@ declare(strict_types=1);
 
 function pcf_actress_directory_cache_dir(): string
 {
-    return dirname(__DIR__) . '/storage/cache/actress-directory-public-v2';
+    return dirname(__DIR__) . '/storage/cache/actress-directory-public-v3';
 }
 
 function pcf_actress_directory_cache_manifest_path(): string
@@ -72,7 +72,13 @@ function pcf_actress_directory_group_key(array $row): string
         }
     }
 
-    return preg_match('/^[A-Za-z]/', $first) ? 'alpha:' . strtoupper($first) : '';
+    if (preg_match('/^[A-Za-z]/', $first)) {
+        return 'alpha:' . strtoupper($first);
+    }
+
+    // SOKUMIRUの商品APIは出演者名を返しても、読み仮名を返さない作品があります。
+    // 漢字などで始まる有効な名前を一覧から捨てず「その他」にまとめます。
+    return 'other';
 }
 
 function pcf_actress_directory_cache_rebuild(bool $force = false): array
@@ -100,42 +106,48 @@ function pcf_actress_directory_cache_rebuild(bool $force = false): array
             }
         }
 
-        $rows = fetch_public_actresses(10000, 0, 'name');
         $groups = [];
         $seen = [];
+        $pageSize = 10000;
+        $offset = 0;
 
-        foreach ($rows as $row) {
-            if (!is_array($row)) {
-                continue;
-            }
-
-            $id = (int)($row['id'] ?? 0);
-            $dmmId = trim((string)($row['dmm_id'] ?? ''));
-            $name = trim((string)($row['name'] ?? ''));
-            $dedupeKey = $dmmId !== '' ? 'dmm:' . $dmmId : 'id:' . $id;
-            if ($id <= 0 || $name === '' || isset($seen[$dedupeKey])) {
-                continue;
-            }
-            if (pcf_actress_directory_invalid_name($name) || $dmmId === '' || str_starts_with($dmmId, 'name:')) {
-                continue;
-            }
-
-            $key = pcf_actress_directory_group_key($row);
-            if ($key === '') {
-                continue;
-            }
-
-            $seen[$dedupeKey] = true;
-            $image = '';
-            foreach (['image_small', 'image_large', 'image_url'] as $imageKey) {
-                $candidate = trim((string)($row[$imageKey] ?? ''));
-                if ($candidate !== '') {
-                    $image = $candidate;
-                    break;
+        do {
+            $rows = fetch_public_actresses($pageSize, $offset, 'name');
+            foreach ($rows as $row) {
+                if (!is_array($row)) {
+                    continue;
                 }
+
+                $id = (int)($row['id'] ?? 0);
+                $dmmId = trim((string)($row['dmm_id'] ?? ''));
+                $name = trim((string)($row['name'] ?? ''));
+                $dedupeKey = $dmmId !== '' ? 'sokumiru:' . $dmmId : 'id:' . $id;
+                if ($id <= 0 || $name === '' || isset($seen[$dedupeKey])) {
+                    continue;
+                }
+                if (pcf_actress_directory_invalid_name($name) || $dmmId === '' || str_starts_with($dmmId, 'name:')) {
+                    continue;
+                }
+
+                $key = pcf_actress_directory_group_key($row);
+                if ($key === '') {
+                    continue;
+                }
+
+                $seen[$dedupeKey] = true;
+                $image = '';
+                foreach (['image_small', 'image_large', 'image_url'] as $imageKey) {
+                    $candidate = trim((string)($row[$imageKey] ?? ''));
+                    if ($candidate !== '') {
+                        $image = $candidate;
+                        break;
+                    }
+                }
+                $groups[$key][] = [$id, $name, $image];
             }
-            $groups[$key][] = [$id, $name, $image];
-        }
+
+            $offset += count($rows);
+        } while (count($rows) === $pageSize);
 
         foreach ($groups as &$groupRows) {
             usort($groupRows, static fn(array $a, array $b): int => strcmp(
@@ -150,6 +162,9 @@ function pcf_actress_directory_cache_rebuild(bool $force = false): array
         $alphaKeys = array_values(array_filter(array_keys($groups), static fn(string $key): bool => str_starts_with($key, 'alpha:')));
         sort($alphaKeys, SORT_STRING);
         $orderedKeys = array_merge($orderedKeys, $alphaKeys);
+        if (($groups['other'] ?? []) !== []) {
+            $orderedKeys[] = 'other';
+        }
 
         $manifestGroups = [];
         foreach ($orderedKeys as $key) {
@@ -166,10 +181,11 @@ function pcf_actress_directory_cache_rebuild(bool $force = false): array
                 throw new RuntimeException('女優一覧の行キャッシュを保存できません。');
             }
 
+            $type = str_starts_with($key, 'kana:') ? 'kana' : (str_starts_with($key, 'alpha:') ? 'alpha' : 'other');
             $manifestGroups[] = [
                 'key' => $key,
-                'label' => substr($key, 0, 5) === 'kana:' ? mb_substr($key, 5) : substr($key, 6),
-                'type' => str_starts_with($key, 'kana:') ? 'kana' : 'alpha',
+                'label' => $type === 'kana' ? mb_substr($key, 5) : ($type === 'alpha' ? substr($key, 6) : 'その他'),
+                'type' => $type,
                 'count' => count($groupRows),
                 'file' => $filename,
             ];

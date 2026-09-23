@@ -26,7 +26,7 @@ function sample_images_parse_list(?string $value): array
     return array_values(array_filter(array_map('trim', $parts), static fn(string $v): bool => $v !== ''));
 }
 
-function sample_images_is_self_hosted_fanza_image_url(string $url): bool
+function sample_images_is_self_hosted_product_image_url(string $url): bool
 {
     $value = trim($url);
     if ($value === '') {
@@ -56,7 +56,7 @@ function sample_images_collect_from_value(mixed $value, array &$images): void
     if (is_string($value)) {
         foreach (sample_images_parse_list($value) as $candidate) {
             $url = trim((string)$candidate);
-            if ($url !== '' && !sample_images_is_self_hosted_fanza_image_url($url)) {
+            if ($url !== '' && !sample_images_is_self_hosted_product_image_url($url)) {
                 $images[] = $url;
             }
         }

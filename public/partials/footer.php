@@ -35,30 +35,8 @@ if ($siteName === '') {
     $siteName = 'PinkClub SOKUMIRU';
 }
 
-$copyrightStartYear = (int)date('Y');
-try {
-    $pdo = db();
-    $startDate = null;
-    foreach (['date_published', 'release_date', 'created_at'] as $column) {
-        $stmt = $pdo->query("SELECT MIN(" . $column . ") FROM items WHERE " . $column . " IS NOT NULL AND " . $column . " <> ''");
-        $value = $stmt ? trim((string)$stmt->fetchColumn()) : '';
-        if ($value !== '') {
-            $startDate = $value;
-            break;
-        }
-    }
-    if ($startDate !== null) {
-        $timestamp = strtotime($startDate);
-        if ($timestamp !== false) {
-            $copyrightStartYear = (int)date('Y', $timestamp);
-        }
-    }
-} catch (Throwable $e) {
-}
 $currentYear = (int)date('Y');
-$copyrightYears = $copyrightStartYear >= $currentYear
-    ? (string)$currentYear
-    : $copyrightStartYear . '-' . $currentYear;
+$copyrightYears = site_start_year() . '-' . $currentYear;
 
 ?>
   <?php $pageType = function_exists('ad_current_page_type') ? ad_current_page_type() : 'home'; ?>
@@ -83,7 +61,7 @@ $copyrightYears = $copyrightStartYear >= $currentYear
   <div class="site-footer__credit">
     <a href="https://sokmil-ad.com/" target="_blank" rel="noopener nofollow"><img src="https://sokmil-ad.com/api/credit/135x18.gif" alt="WEB SERVICE BY SOKMIL" width="135" height="18"></a>
   </div>
-  <div class="site-footer__copy">© <?= e($copyrightYears) ?> <a href="<?= e(public_url('')) ?>"><?= e($siteName) ?></a></div>
+  <div class="site-footer__copy">Copyright ©<?= e($copyrightYears) ?> <a href="<?= e(public_url('')) ?>"><?= e($siteName) ?></a> All Rights Reserved.</div>
 </footer>
 <script src="<?= e(asset_url('js/sample-image-modal.js')) ?>" defer></script>
 <script>

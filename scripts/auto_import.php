@@ -23,6 +23,10 @@ function main(): int
     if (!is_resource($lockHandle)) { echo '[' . date('Y-m-d H:i:s') . " auto_import skipped: another process is running\n"; return 0; }
     try {
         maybe_run_scheduled_jobs();
+        require_once __DIR__ . '/../lib/indexnow.php';
+        pcf_indexnow_dispatch();
+        require_once __DIR__ . '/../lib/public_rankings.php';
+        pcf_public_ranking_warm_due();
         rss_widget_bootstrap();
         rss_trade_disable_stale_sources();
         rss_refresh_stale_sources(2, 1800, 2);

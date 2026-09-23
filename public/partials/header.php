@@ -2,6 +2,7 @@
 declare(strict_types=1);
 
 require_once __DIR__ . '/_helpers.php';
+require_once __DIR__ . '/../../lib/seo_metadata.php';
 
 $pageType = function_exists('ad_current_page_type') ? ad_current_page_type() : 'home';
 $isMobileRequest = function_exists('pcf_public_request_is_mobile') && pcf_public_request_is_mobile();
@@ -70,6 +71,7 @@ $descriptionText = (string)($pageDescription ?? '');
 if ($descriptionText === '') {
     $descriptionText = $tagline;
 }
+$descriptionText = pcf_meta_description($descriptionText, $titleBaseText, basename((string)($_SERVER['SCRIPT_NAME'] ?? 'index.php')), $siteName);
 $canonicalHref = isset($canonicalUrl) && is_string($canonicalUrl) && $canonicalUrl !== '' ? $canonicalUrl : '';
 $ogUrl = isset($ogUrl) && is_string($ogUrl) && $ogUrl !== '' ? $ogUrl : ($canonicalHref !== '' ? $canonicalHref : public_url(basename((string)($_SERVER['SCRIPT_NAME'] ?? 'index.php'))));
 $ogType = isset($ogType) && is_string($ogType) && $ogType !== '' ? $ogType : 'website';
@@ -122,7 +124,7 @@ if ($jsonLdText !== '') {
 $relPrevHref = isset($relPrev) && is_string($relPrev) && $relPrev !== '' ? $relPrev : '';
 $relNextHref = isset($relNext) && is_string($relNext) && $relNext !== '' ? $relNext : '';
 if (!headers_sent()) {
-    header('Referrer-Policy: unsafe-url', true);
+    header('Referrer-Policy: strict-origin-when-cross-origin', true);
 }
 ?>
 <!doctype html>
@@ -130,7 +132,8 @@ if (!headers_sent()) {
 <head>
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
-  <meta name="referrer" content="unsafe-url">
+  <meta name="referrer" content="strict-origin-when-cross-origin">
+  <meta name="rating" content="adult">
   <title><?= e($titleText) ?></title>
   <?php if ($descriptionText !== ''): ?><meta name="description" content="<?= e($descriptionText) ?>"><?php endif; ?>
   <?php if (isset($robotsMeta) && is_string($robotsMeta) && trim($robotsMeta) !== ''): ?><meta name="robots" content="<?= e(trim($robotsMeta)) ?>"><?php endif; ?>
@@ -275,6 +278,7 @@ if (!headers_sent()) {
       <?php else: ?>
         <div class="site-title"><a href="<?= e(public_url('')) ?>" class="site-title-link"><?= e($siteName) ?></a></div>
       <?php endif; ?>
+      <div class="site-disclaimer"><strong>18+：当サイトはアダルトサイトで18歳未満の方はご利用出来ません。</strong></div>
       <div class="site-disclaimer"><strong>当サイトはアフィリエイト広告を利用しています。</strong></div>
     </div>
     <div class="header-right site-header__right">

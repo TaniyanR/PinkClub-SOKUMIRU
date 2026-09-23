@@ -86,7 +86,12 @@ function pcf_public_page_cache_start(int $ttlSeconds = 120): void
         $cacheHost = 'pinkclub-sokumiru.com';
     }
     $cacheAuthority = $cacheHost . ($cachePort !== null ? ':' . $cachePort : '');
-    $variant = ($isMobile ? 'sp' : 'pc') . '|link-rel-v2';
+    $variant = pcf_public_request_is_mobile() ? 'sp' : 'pc';
+    // Invalidate broken/partial public markup after restoring the shared UI.
+    // Keep the existing TTL and the separate image cache unchanged.
+    $variant .= '|link-rel-v2|public-ui-restored-v1|portrait-about-v1|search-recovery-v1|age-copyright-actress-v1';
+    $generationFile = dirname(__DIR__) . '/storage/cache/search-generation';
+    if (is_file($generationFile)) $variant .= '|' . (string)@file_get_contents($generationFile);
     $cacheQuery = [];
     parse_str((string)(parse_url($requestUri, PHP_URL_QUERY) ?? ''), $cacheQuery);
     $allowedCacheQueryKeys = [

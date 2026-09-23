@@ -708,7 +708,9 @@ $hasHomeContent = $newReleaseTop !== []
       <?php foreach ($actresses as $actress): ?>
         <?php $actressImage = actress_index_image(is_array($actress) ? $actress : []); ?>
         <article class="card rail-card rail-card--180">
-          <?php if ($actressImage !== ''): ?><img class="thumb" src="<?= e($actressImage) ?>" alt="<?= e((string)$actress['name']) ?>"><?php else: ?><div class="rail-card__noimage" style="width:180px;height:180px;">画像なし</div><?php endif; ?>
+          <a href="<?= e(app_url('public/actress.php?id=' . (int)$actress['id'])) ?>" aria-label="<?= e((string)$actress['name']) ?>のプロフィール">
+          <?php if ($actressImage !== ''): ?><img class="thumb" src="<?= e($actressImage) ?>" alt="<?= e((string)$actress['name']) ?>" loading="lazy" decoding="async"><?php else: ?><div class="rail-card__noimage" style="width:180px;height:180px;">画像なし</div><?php endif; ?>
+          </a>
           <a class="rail-card__title" href="<?= e(app_url('public/actress.php?id=' . (int)$actress['id'])) ?>"><?= e((string)$actress['name']) ?></a>
         </article>
       <?php endforeach; ?>

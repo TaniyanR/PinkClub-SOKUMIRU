@@ -28,6 +28,7 @@ foreach ($kanaOrder as $kana) {
     $kanaGroups[$kana] = [];
 }
 $alphaGroups = [];
+$otherRows = [];
 
 $resolveIndex = static function (array $row): array {
     $name = trim((string)($row['name'] ?? ''));
@@ -58,7 +59,9 @@ foreach ($displayRows as $r) {
     }
     if ($idx['type'] === 'alpha') {
         $alphaGroups[$idx['key']][] = $r;
+        continue;
     }
+    $otherRows[] = $r;
 }
 
 $sortByName = static function (array &$list): void {
@@ -75,6 +78,8 @@ foreach ($alphaGroups as &$groupRows) {
     $sortByName($groupRows);
 }
 unset($groupRows);
+
+$sortByName($otherRows);
 
 $title = 'シリーズ一覧';
 $pageDescription = 'SOKUMIRU作品をシリーズから探せる一覧です。';
@@ -107,6 +112,16 @@ require __DIR__ . '/partials/header.php';
             <?php endforeach; ?>
           </div>
         <?php endforeach; ?>
+      </section>
+    <?php endif; ?>
+    <?php if ($otherRows !== []): ?>
+      <section class="pcf-index-block" style="content-visibility:auto;contain-intrinsic-size:700px;">
+        <h2 class="pcf-section-title">その他</h2>
+        <div class="pcf-list-card__meta pcf-chip-list">
+          <?php foreach ($otherRows as $r): ?>
+            <a class="pcf-chip" href="<?= e(public_url('series_detail.php?id=' . (int)($r['id'] ?? 0))) ?>"><?= e((string)($r['name'] ?? '')) ?></a>
+          <?php endforeach; ?>
+        </div>
       </section>
     <?php endif; ?>
   </div>

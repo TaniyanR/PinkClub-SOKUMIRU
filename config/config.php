@@ -16,8 +16,19 @@ function normalize_configured_base_url(string $value): string
 function detect_base_path(string $scriptName): string
 {
     $normalized = str_replace('\\', '/', $scriptName);
-    if ($normalized === '' || $normalized === '/') return '';
-    foreach (['#/robots\.txt$#i','#/(?:public|admin)(?:/.*)?$#i','#/index\.php(?:/.*)?$#i','#/[^/]+\.php(?:/.*)?$#i'] as $pattern) {
+    if ($normalized === '' || $normalized === '/') {
+        return '';
+    }
+
+    $patterns = [
+        '#/(?:public|admin)(?:/.*)?$#i',
+        // Apache may expose the rewritten robots endpoint as SCRIPT_NAME.
+        '#/robots\.txt$#i',
+        '#/index\.php(?:/.*)?$#i',
+        '#/[^/]+\.php(?:/.*)?$#i',
+    ];
+
+    foreach ($patterns as $pattern) {
         $candidate = preg_replace($pattern, '', $normalized);
         if (is_string($candidate) && $candidate !== $normalized) { $normalized = $candidate; break; }
     }
@@ -30,7 +41,15 @@ function detect_base_path_from_request_uri(string $requestUri): string
     $path = (string) parse_url($requestUri, PHP_URL_PATH);
     if ($path === '' || $path === '/') return '';
     $normalized = str_replace('\\', '/', $path);
-    foreach (['#/robots\.txt$#i','#/(?:public|admin)(?:/.*)?$#i','#/index\.php(?:/.*)?$#i','#/[^/]+\.php(?:/.*)?$#i'] as $pattern) {
+    $patterns = [
+        '#/(?:public|admin)(?:/.*)?$#i',
+        // robots.txt is a route, not an application installation directory.
+        '#/robots\.txt$#i',
+        '#/index\.php(?:/.*)?$#i',
+        '#/[^/]+\.php(?:/.*)?$#i',
+    ];
+
+    foreach ($patterns as $pattern) {
         $candidate = preg_replace($pattern, '', $normalized);
         if (is_string($candidate) && $candidate !== $normalized) { $normalized = $candidate; break; }
     }
@@ -49,21 +68,45 @@ function apply_detected_path_to_base_url(string $configuredUrl, string $detected
     return $trimmed . $detectedPath;
 }
 
+/**
+ * Build a safe fallback URL when BASE_URL is not configured.
+ * Production URLs never reflect an arbitrary Host header. Localhost and the
+ * explicitly trusted staging host remain dynamic for local and staging tests.
+ */
+function trusted_fallback_base_url(string $detectedPath): string
+{
+    $rawHost = trim((string)($_SERVER['HTTP_HOST'] ?? ''));
+    $parsed = $rawHost !== '' ? parse_url('http://' . $rawHost) : false;
+    $host = is_array($parsed) ? strtolower(trim((string)($parsed['host'] ?? ''), '[]')) : '';
+    $port = is_array($parsed) && isset($parsed['port']) ? (int)$parsed['port'] : null;
+    $isLocal = in_array($host, ['localhost', '127.0.0.1', '::1'], true);
+    $isTrustedStaging = $host === 'pinkclubsokumiru.bichi.xyz';
+
+    if ($isLocal || $isTrustedStaging) {
+        $requestScheme = strtolower(trim((string)($_SERVER['REQUEST_SCHEME'] ?? '')));
+        $forwardedProto = strtolower(trim(explode(',', (string)($_SERVER['HTTP_X_FORWARDED_PROTO'] ?? ''))[0] ?? ''));
+        $isHttps = !empty($_SERVER['HTTPS']) && $_SERVER['HTTPS'] !== 'off';
+        $scheme = ($requestScheme === 'https' || $forwardedProto === 'https' || $isHttps) ? 'https' : 'http';
+        $displayHost = $host === '::1' ? '[::1]' : $host;
+        if ($port !== null && $port >= 1 && $port <= 65535) {
+            $displayHost .= ':' . $port;
+        }
+        return rtrim($scheme . '://' . $displayHost . $detectedPath, '/');
+    }
+
+    return rtrim('https://pinkclub-sokumiru.com' . $detectedPath, '/');
+}
+
 $scriptName = str_replace('\\', '/', (string) ($_SERVER['SCRIPT_NAME'] ?? '/'));
 $basePath = detect_base_path($scriptName);
-if ($basePath === '' && ($scriptName === '' || $scriptName === '/')) {
+if ($basePath === '') {
     $basePath = detect_base_path_from_request_uri((string) ($_SERVER['REQUEST_URI'] ?? ''));
 }
 
 if ($configuredBaseUrl !== '') {
     $baseUrl = apply_detected_path_to_base_url(normalize_configured_base_url($configuredBaseUrl), $basePath);
 } else {
-    $requestScheme = trim((string) ($_SERVER['REQUEST_SCHEME'] ?? ''));
-    $scheme = $requestScheme !== '' ? $requestScheme : ((!empty($_SERVER['HTTPS']) && $_SERVER['HTTPS'] !== 'off') ? 'https' : 'http');
-    $host = trim((string) ($_SERVER['SERVER_NAME'] ?? ''));
-    if ($host === '') $host = trim((string) ($_SERVER['HTTP_HOST'] ?? ''));
-    if (preg_match('/\A(?:[a-z0-9.-]+|\[[a-f0-9:]+\])(?::[0-9]{1,5})?\z/i', $host) !== 1) $host = 'localhost';
-    $baseUrl = rtrim("{$scheme}://{$host}{$basePath}", '/');
+    $baseUrl = trusted_fallback_base_url($basePath);
 }
 
 if (!defined('APP_NAME')) define('APP_NAME', 'PinkClub SOKUMIRU');
