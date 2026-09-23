@@ -14,6 +14,7 @@ $pdo->exec("INSERT INTO items(id,title,image_small) VALUES(288,'Test product','h
 if (($argv[1]??'')==='failure') $pdo->exec('DROP TABLE items');
 $_GET['ids']='288,999'; $_SERVER['REQUEST_METHOD']='GET';
 $code=file_get_contents(dirname(__DIR__).'/public/recently_viewed_items.php');
+$code=preg_replace('/^declare\(strict_types=1\);$/m','',$code);
 $code=preg_replace('/^require_once .*;$/m','',$code);
 ob_start();
 eval('?>'.$code);
