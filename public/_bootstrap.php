@@ -4,16 +4,10 @@ declare(strict_types=1);
 
 require_once __DIR__ . '/../lib/bootstrap.php';
 require_once __DIR__ . '/../lib/access_analytics.php';
-require_once __DIR__ . '/../lib/analytics_beacon_injector.php';
 require_once __DIR__ . '/../lib/crawler_guard.php';
 require_once __DIR__ . '/../lib/public_page_cache.php';
 
-if (!headers_sent()) {
-    header('Referrer-Policy: unsafe-url', true);
-}
-
 pcf_crawler_guard_check();
-analytics_beacon_injector_start();
 
 $publicScriptName = basename((string)($_SERVER['SCRIPT_NAME'] ?? ''));
 if ($publicScriptName === 'setup_check.php' && function_exists('setup_guard_enforce_for_setup_page')) {

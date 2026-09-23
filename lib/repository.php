@@ -202,7 +202,8 @@ function items_product_source_where(string $alias = ''): string
     $outerPrefix = $alias !== '' ? $alias : 'items';
     $where = [];
 
-    if (items_column_exists('item_source')) {
+    $hasItemSource = items_column_exists('item_source');
+    if ($hasItemSource) {
         $where[] = $outerPrefix . '.item_source = "sokumiru_product"';
     }
 
@@ -215,7 +216,11 @@ function items_product_source_where(string $alias = ''): string
         $where[] = 'NOT EXISTS (SELECT 1 FROM item_tombstones gone WHERE gone.item_id = ' . $outerPrefix . '.id)';
     }
 
-    if (items_table_exists('rss_items') && items_table_exists('rss_sources') && items_column_exists('source_type', 'rss_sources')) {
+    // item_source separates API products from partner RSS rows on migrated
+    // databases.  Running the legacy correlated RSS exclusion as well makes
+    // every public item query scan the RSS tables and can exhaust the web
+    // request time limit. Keep it only for pre-migration schemas.
+    if (!$hasItemSource && items_table_exists('rss_items') && items_table_exists('rss_sources') && items_column_exists('source_type', 'rss_sources')) {
         $where[] = 'NOT EXISTS (SELECT 1 FROM rss_items ri INNER JOIN rss_sources rs ON rs.id = ri.source_id WHERE rs.source_type = "partner_link" AND (ri.title = ' . $outerPrefix . '.title OR ri.url = ' . $outerPrefix . '.url OR ri.url = ' . $outerPrefix . '.affiliate_url))';
     }
 
