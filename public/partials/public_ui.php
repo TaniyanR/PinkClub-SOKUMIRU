@@ -83,8 +83,8 @@ if (!function_exists('pcf_looks_like_image_url')) {
 }
 
 
-if (!function_exists('pcf_is_self_hosted_fanza_image_url')) {
-    function pcf_is_self_hosted_fanza_image_url(string $url): bool
+if (!function_exists('pcf_is_self_hosted_product_image_url')) {
+    function pcf_is_self_hosted_product_image_url(string $url): bool
     {
         $value = trim($url);
         if ($value === '') {
@@ -233,14 +233,14 @@ if (!function_exists('pcf_item_image')) {
 
         foreach ($candidates as $candidate) {
             $value = trim($candidate);
-            if ($value !== '' && !pcf_is_self_hosted_fanza_image_url($value)) {
+            if ($value !== '' && !pcf_is_self_hosted_product_image_url($value)) {
                 return $value;
             }
         }
 
         foreach (pcf_parse_image_urls((string)($item['image_list'] ?? '')) as $image) {
             $value = trim((string)$image);
-            if ($value !== '' && !pcf_is_self_hosted_fanza_image_url($value)) {
+            if ($value !== '' && !pcf_is_self_hosted_product_image_url($value)) {
                 return $value;
             }
         }
@@ -358,7 +358,7 @@ if (!function_exists('pcf_collect_sample_image_urls_from_value')) {
         if (is_string($value)) {
             foreach (pcf_parse_image_urls($value) as $candidate) {
                 $url = trim((string)$candidate);
-                if ($url !== '' && !pcf_is_self_hosted_fanza_image_url($url)) {
+                if ($url !== '' && !pcf_is_self_hosted_product_image_url($url)) {
                     $images[] = $url;
                 }
             }
@@ -380,7 +380,6 @@ if (!function_exists('pcf_pick_sample_image_urls_from_raw')) {
     {
         $images = [];
         pcf_collect_sample_image_urls_from_value($raw['sampleImageURL'] ?? null, $images);
-
         return array_values(array_unique(array_filter(array_map(static fn($u) => trim((string)$u), $images))));
     }
 }
@@ -569,7 +568,7 @@ if (!function_exists('pcf_render_item_card')) {
         if ($preferFullPackageImage) {
             foreach ([(string)($item['image_large'] ?? ''), pcf_first_image_from_mixed($item['image_list'] ?? ''), (string)($item['image_small'] ?? '')] as $imageCandidate) {
                 $fullPackageImage = trim($imageCandidate);
-                if ($fullPackageImage !== '' && !pcf_is_self_hosted_fanza_image_url($fullPackageImage)) {
+                if ($fullPackageImage !== '' && !pcf_is_self_hosted_product_image_url($fullPackageImage)) {
                     $imageUrl = $fullPackageImage;
                     break;
                 }
@@ -601,7 +600,7 @@ if (!function_exists('pcf_render_item_card')) {
         if (!$hasSampleImages) {
             foreach (pcf_parse_image_urls((string)($item['image_list'] ?? '')) as $image) {
                 $sampleImageCandidate = trim((string)$image);
-                if ($sampleImageCandidate !== '' && !pcf_is_self_hosted_fanza_image_url($sampleImageCandidate)) {
+                if ($sampleImageCandidate !== '' && !pcf_is_self_hosted_product_image_url($sampleImageCandidate)) {
                     $hasSampleImages = true;
                     break;
                 }
@@ -611,7 +610,7 @@ if (!function_exists('pcf_render_item_card')) {
         echo '<article class="pcf-dm-card">';
         echo '<a class="pcf-dm-card__image-link" href="' . e($itemUrl) . '">';
         if ($imageUrl !== '') {
-            echo '<img class="pcf-dm-card__image" src="' . e($imageUrl) . '" alt="' . e($title) . '" loading="lazy">';
+            echo '<img class="pcf-dm-card__image" src="' . e($imageUrl) . '" alt="' . e($title) . '" loading="lazy" decoding="async">';
         } else {
             echo '<div class="pcf-dm-card__no-image">No Image</div>';
         }

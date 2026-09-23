@@ -17,6 +17,7 @@ try {
 $kanaOrder = ['あ', 'か', 'さ', 'た', 'な', 'は', 'ま', 'や', 'ら', 'わ'];
 $kanaGroups = [];
 $alphaGroups = [];
+$otherGroup = '';
 foreach (($manifest['groups'] ?? []) as $group) {
     if (!is_array($group)) {
         continue;
@@ -27,6 +28,8 @@ foreach (($manifest['groups'] ?? []) as $group) {
         $kanaGroups[$label] = $key;
     } elseif (($group['type'] ?? '') === 'alpha' && preg_match('/\A[A-Z]\z/', $label)) {
         $alphaGroups[$label] = $key;
+    } elseif (($group['type'] ?? '') === 'other' && $key === 'other') {
+        $otherGroup = $key;
     }
 }
 ksort($alphaGroups);
@@ -38,13 +41,14 @@ require __DIR__ . '/partials/header.php';
 ?>
 <?php pcf_render_hero('女優一覧', '気になる女優のプロフィールと出演作品へ。'); ?>
 
-<?php if ($kanaGroups !== [] || $alphaGroups !== []): ?>
+<?php if ($kanaGroups !== [] || $alphaGroups !== [] || $otherGroup !== ''): ?>
   <nav class="pcf-index-nav">
     <?php foreach ($kanaOrder as $kana): ?>
       <?php if (!isset($kanaGroups[$kana])): continue; endif; ?>
       <a class="pcf-index-nav__item" href="#actress-kana-<?= e(rawurlencode($kana)) ?>"><?= e($kana) ?></a>
     <?php endforeach; ?>
     <?php if ($alphaGroups !== []): ?><a class="pcf-index-nav__item" href="#actress-alpha">A-Z</a><?php endif; ?>
+    <?php if ($otherGroup !== ''): ?><a class="pcf-index-nav__item" href="#actress-other">その他</a><?php endif; ?>
   </nav>
 
   <div class="pcf-actress-directory">
@@ -65,6 +69,13 @@ require __DIR__ . '/partials/header.php';
             <div data-actress-lazy-group="<?= e($groupKey) ?>" style="display:grid;grid-template-columns:repeat(auto-fill,minmax(180px,1fr));gap:10px;margin-top:6px;"></div>
           </div>
         <?php endforeach; ?>
+      </section>
+    <?php endif; ?>
+
+    <?php if ($otherGroup !== ''): ?>
+      <section class="pcf-index-block" id="actress-other" style="content-visibility:auto;contain-intrinsic-size:700px;">
+        <h2 class="pcf-section-title">その他</h2>
+        <div class="pcf-list-card__meta" data-actress-lazy-group="<?= e($otherGroup) ?>" style="display:grid;grid-template-columns:repeat(auto-fill,minmax(180px,1fr));gap:10px;"></div>
       </section>
     <?php endif; ?>
   </div>

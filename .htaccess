@@ -1,27 +1,50 @@
 ErrorDocument 404 /404.php
 Options -Indexes
 RewriteEngine On
+RewriteRule (^|/)(?:\.git|\.env|\.svn)(?:[/.]|$) - [F,L,NC]
+RewriteRule ^(?:tests|scripts|docs)(?:/|$) - [F,L,NC]
+RewriteCond %{HTTP_HOST} ^www\.pinkclub-sokumiru\.com$ [NC]
+RewriteRule ^ https://pinkclub-sokumiru.com%{REQUEST_URI} [R=301,L,NE]
+RewriteCond %{HTTP_HOST} ^pinkclub-sokumiru\.com$ [NC]
 RewriteCond %{HTTPS} !=on
-RewriteRule ^(?:index\.(?:php|com))?$ https://%{HTTP_HOST}/ [R=301,L]
+RewriteCond %{HTTP:X-Forwarded-Proto} !https [NC]
+RewriteRule ^ https://pinkclub-sokumiru.com%{REQUEST_URI} [R=301,L,NE]
 RewriteRule ^index\.(?:php|com)$ / [R=301,L]
-RewriteRule ^robots\.txt$ public/robots.php [L]
 RewriteCond %{THE_REQUEST} \s/+public/(item|items|actress|actresses|genre|genres|maker|makers|series_detail|series_list|label|labels|author|authors|posts|search)\.php(?:[?\s]) [NC]
 RewriteRule ^public/(item|items|actress|actresses|genre|genres|maker|makers|series_detail|series_list|label|labels|author|authors|posts|search)\.php$ /$1.php [R=301,L,NE]
 RewriteCond %{THE_REQUEST} \s/+(?:public/)?series_one\.php(?:[?\s]) [NC]
 RewriteRule ^(?:public/)?series_one\.php$ /series_detail.php [R=301,L,NE]
-RewriteRule ^(config(?:\.local)?\.php|cache|logs|storage|config|lib|sql)(/|$) - [F,L]
+RewriteRule ^robots\.txt$ public/robots.php [L]
+RewriteRule ^(config(?:\.local)?\.php|cache|storage|logs|config|lib|sql)(/|$) - [F,L]
 RewriteRule ^public/ - [L]
 RewriteCond %{REQUEST_FILENAME} -f [OR]
 RewriteCond %{REQUEST_FILENAME} -d
 RewriteRule ^ - [L]
 RewriteRule ^(.*)$ public/$1 [L]
 
-<IfModule mod_deflate.c>
-  AddOutputFilterByType DEFLATE text/html text/plain text/css text/javascript application/javascript application/json application/xml image/svg+xml
+<IfModule mod_expires.c>
+ExpiresActive On
+ExpiresByType text/css "access plus 1 year"
+ExpiresByType application/javascript "access plus 1 year"
+ExpiresByType image/jpeg "access plus 1 year"
+ExpiresByType image/png "access plus 1 year"
+ExpiresByType image/gif "access plus 1 year"
+ExpiresByType image/webp "access plus 1 year"
+ExpiresByType image/svg+xml "access plus 1 year"
+ExpiresByType image/x-icon "access plus 1 year"
+ExpiresByType font/woff2 "access plus 1 year"
 </IfModule>
-
 <IfModule mod_headers.c>
-  <FilesMatch "\.(?:css|js|png|jpe?g|gif|webp|avif|svg|ico|woff2?)$">
-    Header set Cache-Control "public, max-age=604800"
-  </FilesMatch>
+Header always set X-Frame-Options "SAMEORIGIN"
+Header always set X-Content-Type-Options "nosniff"
+Header always set Referrer-Policy "strict-origin-when-cross-origin"
+<FilesMatch "\.(?:css|js|jpe?g|png|gif|webp|svg|ico|woff2)$">
+Header set Cache-Control "public, max-age=86400"
+</FilesMatch>
+<FilesMatch "\.(?:css|js)$">
+Header set Cache-Control "public, max-age=31536000, immutable"
+</FilesMatch>
+</IfModule>
+<IfModule mod_deflate.c>
+AddOutputFilterByType DEFLATE text/html text/plain text/css application/javascript application/json application/xml image/svg+xml
 </IfModule>

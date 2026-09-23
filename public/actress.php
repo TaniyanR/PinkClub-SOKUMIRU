@@ -71,8 +71,10 @@ $row = null;
 $list = [];
 try {
     $row = fetch_actress($id);
-} catch (Throwable) {
-    $row = null;
+} catch (Throwable $e) {
+    error_log('Actress lookup failed: ' . $e->getMessage());
+    require_once __DIR__ . '/../lib/search_lifecycle.php';
+    pcf_search_error(503);
 }
 
 if (!is_array($row)) {
@@ -152,9 +154,7 @@ try {
     $list = [];
     $hasNext = false;
 }
-if ($actressItemsLoaded && $actressPage === 1 && $list === []) {
-    require __DIR__ . '/404.php';
-}
+// A registered actress still has a profile when no public works are available.
 
 $profileImage = actress_profile_image($profile);
 $actressDisplayName = $profile['name'];
@@ -269,7 +269,7 @@ require __DIR__ . '/partials/header.php';
     <?php endif; ?>
   </nav>
 <?php else: ?>
-  <?php pcf_render_empty('関連作品はまだありません。'); ?>
+  <?php pcf_render_empty('現在、公開中の出演作品はありません。'); ?>
 <?php endif; ?>
 
 <?php pcf_render_entity_access_ranking(

@@ -17,3 +17,4 @@ declare(strict_types=1);
 <div id="pcf-recent-restore" class="pcf-recent-restore" hidden>
   <button id="pcf-recent-show" type="button" onclick="try{localStorage.removeItem('pcf_recently_viewed_hidden_v1')}catch(e){}var s=document.getElementById('pcf-recently-viewed');var r=document.getElementById('pcf-recent-restore');if(r)r.hidden=true;if(s)s.hidden=false;">最近見た作品を表示する</button>
 </div>
+<script src="<?= e(asset_url('js/recently-viewed-front-cover.js')) ?>" defer></script>

@@ -9,6 +9,11 @@ $message = null;
 $error = null;
 $recommendedTagline = 'SOKUMIRUの新着・人気アダルト動画を、サンプル動画・画像を見ながら出演者やジャンルから手軽に探せる作品情報サイトです。';
 $recommendedKeywords = 'PinkClub SOKUMIRU,SOKUMIRU,新着動画,人気動画,アダルト動画,サンプル動画,サンプル画像,出演者,ジャンル,メーカー,シリーズ';
+$normalizePinkClubName = static function (string $value): string {
+    $value = trim($value);
+    $normalized = preg_replace('/^PinkClub\s*[-‐‑‒–—]\s*/u', 'PinkClub ', $value);
+    return is_string($normalized) ? trim($normalized) : $value;
+};
 
 $uploadDir = __DIR__ . '/../public/uploads/site_settings';
 if (!is_dir($uploadDir)) @mkdir($uploadDir, 0755, true);
@@ -40,12 +45,15 @@ $persistMedia = static function (string $key, array $result): void {
 
 if ($_SERVER['REQUEST_METHOD'] === 'POST') {
     csrf_validate_or_fail((string)post('_csrf', ''));
-    $siteName=trim((string)post('site_name',''));$siteUrl=rtrim(trim((string)post('site_url','')),'/');$tagline=trim((string)post('site_tagline',''));$keywords=trim((string)post('site_keywords',''));$adminEmail=trim((string)post('site_admin_email',''));
+    $startYear=filter_var(post('site_start_year',(string)site_start_year()),FILTER_VALIDATE_INT,['options'=>['min_range'=>1900,'max_range'=>(int)date('Y')]]);
+    $siteName=$normalizePinkClubName((string)post('site_name',''));$siteUrl=rtrim(trim((string)post('site_url','')),'/');$tagline=trim((string)post('site_tagline',''));$keywords=trim((string)post('site_keywords',''));$adminEmail=trim((string)post('site_admin_email',''));
     $siteUrlParts=$siteUrl!==''?parse_url($siteUrl):false;
-    if($siteUrl===''||filter_var($siteUrl,FILTER_VALIDATE_URL)===false||!is_array($siteUrlParts)||!in_array(strtolower((string)($siteUrlParts['scheme']??'')),['http','https'],true)||trim((string)($siteUrlParts['host']??''))===''||isset($siteUrlParts['user'])||isset($siteUrlParts['pass']))$error='サイトURLは http:// または https:// から始まる正しいURLを入力してください。';
+    if($startYear===false)$error='開設年は1900年から今年までの西暦で入力してください。';
+    if($error===null&&$siteName==='')$error='サイト名を入力してください。';
+    if($error===null&&($siteUrl===''||filter_var($siteUrl,FILTER_VALIDATE_URL)===false||!is_array($siteUrlParts)||strtolower((string)($siteUrlParts['scheme']??''))!=='https'||trim((string)($siteUrlParts['host']??''))===''||isset($siteUrlParts['user'])||isset($siteUrlParts['pass'])))$error='URLは https:// から始まる正しいURLを入力してください。';
     if($error===null&&($adminEmail===''||filter_var($adminEmail,FILTER_VALIDATE_EMAIL)===false))$error='お問い合わせ受信メールアドレスを正しく入力してください。';
 
-    $updates=['site.title'=>$siteName,'site.name'=>$siteName,'site.url'=>$siteUrl,'site.tagline'=>$tagline,'site.keywords'=>$keywords,'site.admin_email'=>$adminEmail];
+    $updates=['site.start_year'=>(string)$startYear,'site.title'=>$siteName,'site.name'=>$siteName,'site.url'=>$siteUrl,'site.tagline'=>$tagline,'site.keywords'=>$keywords,'site.admin_email'=>$adminEmail];
 
     $uploadSpecs=[
         'site_logo'=>['media'=>'logo','prefix'=>'logo','minW'=>250,'maxW'=>400,'minH'=>50,'maxH'=>100,'square'=>false,'mimes'=>['image/png','image/jpeg','image/webp','image/gif'],'setting'=>'site.logo_path'],
@@ -86,6 +94,8 @@ require __DIR__ . '/includes/header.php';
   <form method="post" enctype="multipart/form-data" style="max-width:760px;">
     <?= csrf_input() ?>
     <label>サイト名<input type="text" name="site_name" value="<?= e(site_setting_get('site.title',site_setting_get('site.name',APP_NAME))) ?>"></label>
+    <label>開設年（西暦）<input type="number" name="site_start_year" min="1900" max="<?= (int)date('Y') ?>" value="<?= site_start_year() ?>" required></label>
+    <p class="admin-form-note">フッターの開始年に使います。未設定時は初期管理者の作成年を表示するため、実際の開設年を入力してください。</p>
     <label>URL<input type="url" name="site_url" value="<?= e(site_setting_get('site.url',app_url())) ?>"></label>
     <label>お問い合わせ受信メールアドレス<input type="email" name="site_admin_email" value="<?= e($adminEmailValue) ?>" required autocomplete="email"><small>一般のお問い合わせ・掲載削除依頼・パスワード再設定メールの受信先として使用します。</small></label>
     <label>総合RSS（10分間隔）<input type="url" value="<?= e(public_url('feed-10.php')) ?>" readonly></label>

@@ -2,6 +2,27 @@
 
 declare(strict_types=1);
 
+/** Portrait cover supplied by the product provider; never substitute the landscape package/OGP. */
+function item_front_cover_url(array $item): string
+{
+    $raw = json_decode((string)($item['raw_json'] ?? ''), true);
+    $candidates = [$item['image_small'] ?? '', $raw['imageURL']['small'] ?? '', $raw['packageImage']['small'] ?? ''];
+    foreach ($candidates as $candidate) {
+        if (!is_string($candidate)) {
+            continue;
+        }
+        $url = trim($candidate);
+        if (str_starts_with($url, '//')) {
+            $url = 'https:' . $url;
+        }
+        if (in_array(strtolower((string)parse_url($url, PHP_URL_SCHEME)), ['http', 'https'], true)
+            && filter_var($url, FILTER_VALIDATE_URL) !== false) {
+            return $url;
+        }
+    }
+    return '';
+}
+
 function image_fallback_url(): string
 {
     return asset_url('img/no-image.png');

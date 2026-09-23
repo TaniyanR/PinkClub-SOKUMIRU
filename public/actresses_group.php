@@ -15,7 +15,7 @@ header('Content-Type: application/json; charset=UTF-8');
 header('Cache-Control: public, max-age=3600');
 
 $key = trim((string)get('group', ''));
-if (!preg_match('/\A(?:kana:[あかさたなはまやらわ]|alpha:[A-Z])\z/u', $key)) {
+if (!preg_match('/\A(?:kana:[あかさたなはまやらわ]|alpha:[A-Z]|other)\z/u', $key)) {
     http_response_code(400);
     echo json_encode(['success' => false, 'rows' => []], JSON_UNESCAPED_UNICODE | JSON_UNESCAPED_SLASHES);
     exit;

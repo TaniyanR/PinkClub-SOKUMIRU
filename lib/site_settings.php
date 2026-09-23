@@ -249,3 +249,19 @@ function site_title_setting_set(string $value): void
         'site_name' => $normalized,
     ]);
 }
+
+
+function site_start_year(): int
+{
+    $currentYear = (int)date('Y');
+    $configured = filter_var(site_setting_get('site.start_year', ''), FILTER_VALIDATE_INT,
+        ['options'=>['min_range'=>1900, 'max_range'=>$currentYear]]);
+    if ($configured !== false) return $configured;
+    // Installation date is a fallback only; the owner can specify the actual launch year.
+    try {
+        $year = (int)db()->query('SELECT YEAR(MIN(created_at)) FROM admins')->fetchColumn();
+        if ($year >= 1900 && $year <= $currentYear) return $year;
+    } catch (Throwable) {
+    }
+    return $currentYear;
+}

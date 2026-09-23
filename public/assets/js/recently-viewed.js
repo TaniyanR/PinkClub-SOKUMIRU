@@ -19,6 +19,7 @@
   if (!storageAvailable()) return;
 
   const safeImageUrl = (value) => {
+    if (!String(value || '').trim()) return '';
     try {
       const url = new URL(String(value || ''), window.location.origin);
       return url.protocol === 'http:' || url.protocol === 'https:' ? url.href : '';
@@ -106,8 +107,8 @@
       version: 1,
       id,
       title,
-      image,
-      image_fallbacks: normalizeImageFallbacks(entry.image_fallbacks, image),
+      image: entry.imageType === 'front-cover' ? safeImageUrl(entry.image) : '',
+      imageType: entry.imageType === 'front-cover' ? 'front-cover' : '',
       url,
       viewedAt: Number.isFinite(Number(entry.viewedAt)) ? Number(entry.viewedAt) : 0,
       viewCount: Math.max(1, Math.min(999, Number.parseInt(String(entry.viewCount || 1), 10) || 1)),
@@ -189,15 +190,15 @@
     const title = String(rawTitle || '').replace(/\s*\|\s*PinkClub.*$/i, '').trim();
     if (!title) return;
 
-    const imageMeta = document.querySelector('meta[property="og:image"]');
+    const frontCover = document.querySelector('[data-recent-front-cover]');
     const previous = readHistory();
     const existing = previous.find((entry) => entry.id === id);
     const record = {
       version: 1,
       id,
       title: title.slice(0, 300),
-      image: safeImageUrl((imageMeta && imageMeta.content) || ''),
-      image_fallbacks: [],
+      image: safeImageUrl(frontCover ? frontCover.dataset.recentFrontCover : ''),
+      imageType: 'front-cover',
       url: itemUrlForId(id, window.location.href),
       viewedAt: Date.now(),
       viewCount: Math.min(999, Number(existing ? existing.viewCount : 0) + 1),
@@ -384,6 +385,7 @@
     });
   };
 
+  window.addEventListener('pcf-recent-images-updated', renderHistory);
   recordCurrentItem();
   renderHistory();
   window.addEventListener('pageshow', renderHistory);

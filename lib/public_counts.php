@@ -31,16 +31,25 @@ function pcf_public_counts(): array
     }
 
     try {
+        // Never rebuild the full public directory while rendering a normal page.
+        // On a fresh deployment this may scan tens of thousands of rows and write
+        // every group file, which can exceed the web request time limit and turn
+        // otherwise healthy pages into HTTP 500 responses.  A cached manifest is
+        // authoritative; until it exists, use a small indexed COUNT query.
         $manifest = pcf_actress_directory_cache_read_manifest();
-        if (!is_array($manifest) || ($manifest['groups'] ?? []) === []) {
-            $manifest = pcf_actress_directory_cache_rebuild(true);
+        $actressCount = is_array($manifest)
+            ? pcf_actress_directory_cache_count($manifest)
+            : null;
+
+        if ($actressCount === null && db_table_exists('actresses')) {
+            $sql = 'SELECT COUNT(*) FROM actresses';
+            if (db_column_exists('actresses', 'dmm_id')) {
+                $sql .= ' WHERE COALESCE(dmm_id, "") <> "" AND dmm_id NOT LIKE "name:%"';
+            }
+            $stmt = db()->query($sql);
+            $actressCount = $stmt ? (int)$stmt->fetchColumn() : null;
         }
 
-        $actressCount = pcf_actress_directory_cache_count($manifest);
-        if ($actressCount === null) {
-            $manifest = pcf_actress_directory_cache_rebuild(true);
-            $actressCount = pcf_actress_directory_cache_count($manifest);
-        }
         $counts['actresses'] = $actressCount;
     } catch (Throwable $e) {
         $counts['actresses'] = null;

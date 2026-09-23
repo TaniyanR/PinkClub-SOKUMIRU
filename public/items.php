@@ -87,7 +87,7 @@ function parse_index_image_urls(?string $value): array
 }
 
 
-function index_is_self_hosted_fanza_image_url(string $url): bool
+function index_is_self_hosted_product_image_url(string $url): bool
 {
     $value = trim($url);
     if ($value === '') {
@@ -122,7 +122,7 @@ function items_has_sample_image_value(mixed $value): bool
             }
             if (filter_var($url, FILTER_VALIDATE_URL) !== false
                 && in_array(strtolower((string)parse_url($url, PHP_URL_SCHEME)), ['http', 'https'], true)
-                && !index_is_self_hosted_fanza_image_url($url)
+                && !index_is_self_hosted_product_image_url($url)
             ) {
                 return true;
             }
@@ -265,7 +265,8 @@ function index_items_product_source_where(PDO $pdo): string
     }
 
     $parts = [];
-    if (index_column_exists($pdo, 'items', 'item_source')) {
+    $hasItemSource = index_column_exists($pdo, 'items', 'item_source');
+    if ($hasItemSource) {
         $parts[] = 'items.item_source = "sokumiru_product"';
     }
     // Keep the standalone item-list query aligned with the shared public filter.
@@ -274,7 +275,7 @@ function index_items_product_source_where(PDO $pdo): string
     $parts[] = 'COALESCE(items.url, "") NOT LIKE "%/limited_item/%"';
     $parts[] = 'COALESCE(items.affiliate_url, "") NOT LIKE "%/limited_item/%"';
     $parts[] = index_items_front_release_where();
-    if (index_table_exists($pdo, 'rss_items') && index_table_exists($pdo, 'rss_sources') && index_column_exists($pdo, 'rss_sources', 'source_type')) {
+    if (!$hasItemSource && index_table_exists($pdo, 'rss_items') && index_table_exists($pdo, 'rss_sources') && index_column_exists($pdo, 'rss_sources', 'source_type')) {
         $parts[] = 'NOT EXISTS (SELECT 1 FROM rss_items ri INNER JOIN rss_sources rs ON rs.id = ri.source_id WHERE rs.source_type = "partner_link" AND (ri.title = items.title OR ri.url = items.url OR ri.url = items.affiliate_url))';
     }
 
@@ -318,7 +319,7 @@ function item_sample_state(array $item): array
     if (!$hasImageSample) {
         foreach (parse_index_image_urls((string)($item['image_list'] ?? '')) as $image) {
             $sampleImageCandidate = trim((string)$image);
-            if ($sampleImageCandidate !== '' && !index_is_self_hosted_fanza_image_url($sampleImageCandidate)) {
+            if ($sampleImageCandidate !== '' && !index_is_self_hosted_product_image_url($sampleImageCandidate)) {
                 $hasImageSample = true;
                 break;
             }
@@ -334,14 +335,14 @@ function pick_full_package_image(array $item): string
         if ($key === 'image_list') {
             foreach (parse_index_image_urls((string)($item['image_list'] ?? '')) as $image) {
                 $candidate = trim((string)$image);
-                if ($candidate !== '' && !index_is_self_hosted_fanza_image_url($candidate)) {
+                if ($candidate !== '' && !index_is_self_hosted_product_image_url($candidate)) {
                     return $candidate;
                 }
             }
             continue;
         }
         $candidate = trim((string)($item[$key] ?? ''));
-        if ($candidate !== '' && !index_is_self_hosted_fanza_image_url($candidate)) {
+        if ($candidate !== '' && !index_is_self_hosted_product_image_url($candidate)) {
             return $candidate;
         }
     }
@@ -360,17 +361,17 @@ function render_item_card(array $item, int $width = 180, ?array $taxonomy = null
     $thumbUrl = trim((string)($item['image_small'] ?? ''));
     if ($preferFullPackageImage) {
         $fullPackageImage = pick_full_package_image($item);
-        if ($fullPackageImage !== '' && !index_is_self_hosted_fanza_image_url($fullPackageImage)) {
+        if ($fullPackageImage !== '' && !index_is_self_hosted_product_image_url($fullPackageImage)) {
             $thumbUrl = $fullPackageImage;
         }
     }
-    if ($thumbUrl !== '' && index_is_self_hosted_fanza_image_url($thumbUrl)) {
+    if ($thumbUrl !== '' && index_is_self_hosted_product_image_url($thumbUrl)) {
         $thumbUrl = '';
     }
     if ($thumbUrl === '') {
         $thumbUrl = trim((string)($item['image_large'] ?? ''));
     }
-    if ($thumbUrl !== '' && index_is_self_hosted_fanza_image_url($thumbUrl)) {
+    if ($thumbUrl !== '' && index_is_self_hosted_product_image_url($thumbUrl)) {
         $thumbUrl = '';
     }
     ?>
