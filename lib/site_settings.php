@@ -107,8 +107,27 @@ function site_settings_cache_set(string $key, string $value): void
     $GLOBALS['__site_settings_cache'][$key] = $value;
 }
 
+function site_settings_media_path(string $key): string
+{
+    if (!function_exists('site_media_public_path')) {
+        return '';
+    }
+
+    $mediaKey = match ($key) {
+        'site.logo_path' => 'logo',
+        'site.favicon_path' => 'favicon',
+        default => '',
+    };
+    return $mediaKey !== '' ? site_media_public_path($mediaKey) : '';
+}
+
 function site_setting_get(string $key, string $default = ''): string
 {
+    $mediaPath = site_settings_media_path($key);
+    if ($mediaPath !== '') {
+        return $mediaPath;
+    }
+
     if (site_settings_cache_has($key)) {
         return site_settings_cache_get($key, $default);
     }

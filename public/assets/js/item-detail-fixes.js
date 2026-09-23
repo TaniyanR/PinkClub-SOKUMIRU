@@ -1,6 +1,19 @@
 (() => {
   'use strict';
 
+  document.addEventListener('click', (event) => {
+    if (!(event.target instanceof Element)) return;
+
+    const vrAffiliateLink = event.target.closest('a[href*="vr_affiliate.php"]');
+    if (!vrAffiliateLink) return;
+
+    // VRカードは元の「サンプル動画」ボタンのclassを引き継いで生成される。
+    // トップページの動画モーダル処理に横取りされないよう、クリック時に解除する。
+    vrAffiliateLink.classList.remove('sample-movie-trigger');
+    vrAffiliateLink.removeAttribute('data-movie-url');
+    vrAffiliateLink.removeAttribute('data-movie-title');
+  }, true);
+
   if (!/(^|\/)item\.php$/.test(window.location.pathname)) return;
 
   const rows = Array.from(document.querySelectorAll('.pcf-item-main__info tr'));

@@ -142,6 +142,8 @@ try {
     }
 
     $receipt = 'DEL-' . date('Ymd') . '-' . strtoupper(bin2hex(random_bytes(4)));
+    $attachmentName = 'identity-document-' . preg_replace('/[^A-Za-z0-9_-]/', '', $receipt) . '.' . $extensions[$mime];
+    $attachmentSize = number_format($size / 1024, 1) . ' KB';
     $mailBody = "受付番号: {$receipt}\n"
         . "対象サイト: PinkClub SOKUMIRU\n"
         . "お名前（本名）: {$name}\n"
@@ -149,7 +151,9 @@ try {
         . "電話番号: " . ($phone !== '' ? $phone : '未入力') . "\n\n"
         . "該当ページURL:\n{$pageUrls}\n\n"
         . "申請理由:\n{$reason}\n\n"
-        . "本人確認書類はこのメールに添付されています。サーバーには保存していません。";
+        . "本人確認書類（必須）: 添付済み\n"
+        . "添付ファイル: {$attachmentName} ({$attachmentSize})\n"
+        . "本人確認書類はサーバーには保存していません。";
 
     if (!deletion_request_send_mail($toEmail, $email, $receipt, $mailBody, $tmp, $mime, $extensions[$mime])) {
         throw new RuntimeException('削除依頼メールの送信に失敗しました。時間をおいて再度お試しください。');
@@ -158,7 +162,12 @@ try {
     header('Location: ' . $backUrl . '&receipt=' . rawurlencode($receipt));
     exit;
 } catch (Throwable $e) {
-    $message = mb_substr($e->getMessage(), 0, 200);
+    if ($e instanceof RuntimeException) {
+        $message = mb_substr($e->getMessage(), 0, 200);
+    } else {
+        error_log('deletion request failed: ' . $e->getMessage());
+        $message = '削除依頼の処理中にエラーが発生しました。時間をおいて再度お試しください。';
+    }
     header('Location: ' . $backUrl . '&deletion_error=' . rawurlencode($message));
     exit;
 }

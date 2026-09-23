@@ -109,51 +109,16 @@ function rss_extract_first_image_url(SimpleXMLElement $item): string
     return '';
 }
 
-function rss_feed_public_ip(string $ip): bool
-{
-    return filter_var($ip, FILTER_VALIDATE_IP) !== false
-        && filter_var($ip, FILTER_VALIDATE_IP, FILTER_FLAG_NO_PRIV_RANGE | FILTER_FLAG_NO_RES_RANGE) !== false;
-}
-
-function rss_feed_resolve_public_ips(string $host): array
-{
-    if (filter_var($host, FILTER_VALIDATE_IP) !== false) {
-        return rss_feed_public_ip($host) ? [$host] : [];
-    }
-
-    $ips = [];
-    $records = @dns_get_record($host, DNS_A | DNS_AAAA);
-    if (is_array($records)) {
-        foreach ($records as $record) {
-            $ip = trim((string)($record['ip'] ?? $record['ipv6'] ?? ''));
-            if ($ip === '') {
-                continue;
-            }
-            // A hostname that also resolves to an internal address is unsafe.
-            if (!rss_feed_public_ip($ip)) {
-                return [];
-            }
-            $ips[$ip] = true;
-        }
-    }
-
-    if ($ips === []) {
-        foreach ((array)@gethostbynamel($host) as $ip) {
-            $ip = trim((string)$ip);
-            if ($ip === '' || !rss_feed_public_ip($ip)) {
-                return [];
-            }
-            $ips[$ip] = true;
-        }
-    }
-
-    return array_keys($ips);
-}
-
-function rss_feed_normalize_url(string $value): string
+function rss_http_url(string $value): string
 {
     $url = trim($value);
-    if ($url === '' || str_contains($url, "\r") || str_contains($url, "\n") || filter_var($url, FILTER_VALIDATE_URL) === false) {
+    if ($url === '' || str_contains($url, "\r") || str_contains($url, "\n")) {
+        return '';
+    }
+    if (str_starts_with($url, '//')) {
+        $url = 'https:' . $url;
+    }
+    if (filter_var($url, FILTER_VALIDATE_URL) === false) {
         return '';
     }
 
@@ -162,34 +127,75 @@ function rss_feed_normalize_url(string $value): string
         return '';
     }
     $scheme = strtolower((string)($parts['scheme'] ?? ''));
-    $host = strtolower(rtrim((string)($parts['host'] ?? ''), '.'));
+    $host = strtolower(trim((string)($parts['host'] ?? ''), '[]'));
     $port = isset($parts['port']) ? (int)$parts['port'] : ($scheme === 'https' ? 443 : 80);
     if (!in_array($scheme, ['http', 'https'], true)
         || $host === ''
-        || $host === 'localhost'
-        || str_ends_with($host, '.localhost')
-        || str_ends_with($host, '.local')
         || !in_array($port, [80, 443], true)
         || isset($parts['user'])
-        || isset($parts['pass'])
-        || rss_feed_resolve_public_ips($host) === []) {
+        || isset($parts['pass'])) {
+        return '';
+    }
+
+    $ipHost = filter_var($host, FILTER_VALIDATE_IP);
+    if ($ipHost !== false
+        && filter_var($host, FILTER_VALIDATE_IP, FILTER_FLAG_NO_PRIV_RANGE | FILTER_FLAG_NO_RES_RANGE) === false) {
         return '';
     }
 
     return $url;
 }
 
-function rss_feed_redirect_url(string $currentUrl, string $location): string
+function rss_public_ip(string $ip): bool
+{
+    return filter_var($ip, FILTER_VALIDATE_IP) !== false
+        && filter_var($ip, FILTER_VALIDATE_IP, FILTER_FLAG_NO_PRIV_RANGE | FILTER_FLAG_NO_RES_RANGE) !== false;
+}
+
+function rss_resolve_public_ips(string $host): array
+{
+    $host = strtolower(trim($host, '[]'));
+    if ($host === '') {
+        return [];
+    }
+    if (filter_var($host, FILTER_VALIDATE_IP) !== false) {
+        return rss_public_ip($host) ? [$host] : [];
+    }
+
+    $ips = [];
+    $records = @dns_get_record($host, DNS_A | DNS_AAAA);
+    if (is_array($records)) {
+        foreach ($records as $record) {
+            $ip = trim((string)($record['ip'] ?? $record['ipv6'] ?? ''));
+            if ($ip !== '' && rss_public_ip($ip)) {
+                $ips[$ip] = true;
+            }
+        }
+    }
+    if ($ips === []) {
+        foreach ((array)@gethostbynamel($host) as $ip) {
+            $ip = trim((string)$ip);
+            if ($ip !== '' && rss_public_ip($ip)) {
+                $ips[$ip] = true;
+            }
+        }
+    }
+
+    return array_keys($ips);
+}
+
+function rss_redirect_url(string $currentUrl, string $location): string
 {
     $location = trim($location);
     if ($location === '') {
         return '';
     }
     if (str_starts_with($location, '//')) {
-        return rss_feed_normalize_url((string)parse_url($currentUrl, PHP_URL_SCHEME) . ':' . $location);
+        $scheme = strtolower((string)(parse_url($currentUrl, PHP_URL_SCHEME) ?: 'https'));
+        return rss_http_url($scheme . ':' . $location);
     }
-    if (preg_match('#^https?://#i', $location) === 1) {
-        return rss_feed_normalize_url($location);
+    if (str_starts_with($location, 'http://') || str_starts_with($location, 'https://')) {
+        return rss_http_url($location);
     }
 
     $parts = parse_url($currentUrl);
@@ -199,20 +205,23 @@ function rss_feed_redirect_url(string $currentUrl, string $location): string
     $scheme = strtolower((string)($parts['scheme'] ?? 'https'));
     $host = (string)$parts['host'];
     $port = isset($parts['port']) ? ':' . (int)$parts['port'] : '';
-    $origin = $scheme . '://' . $host . $port;
-    if (str_starts_with($location, '/')) {
-        return rss_feed_normalize_url($origin . $location);
-    }
+    $base = $scheme . '://' . $host . $port;
+    $currentPath = (string)($parts['path'] ?? '/');
+
     if (str_starts_with($location, '?')) {
-        return rss_feed_normalize_url($origin . (string)($parts['path'] ?? '/') . $location);
+        return rss_http_url($base . $currentPath . $location);
+    }
+    if (str_starts_with($location, '/')) {
+        return rss_http_url($base . $location);
     }
 
-    $directory = rtrim(str_replace('\\', '/', dirname((string)($parts['path'] ?? '/'))), '/');
-    if ($directory === '.' || $directory === '/') {
-        $directory = '';
+    $dir = rtrim(str_replace('\\', '/', dirname($currentPath)), '/');
+    if ($dir === '.' || $dir === '/') {
+        $dir = '';
     }
+    $combined = $dir . '/' . $location;
     $segments = [];
-    foreach (explode('/', $directory . '/' . $location) as $segment) {
+    foreach (explode('/', $combined) as $segment) {
         if ($segment === '' || $segment === '.') {
             continue;
         }
@@ -222,23 +231,29 @@ function rss_feed_redirect_url(string $currentUrl, string $location): string
         }
         $segments[] = $segment;
     }
-    return rss_feed_normalize_url($origin . '/' . implode('/', $segments));
+
+    return rss_http_url($base . '/' . implode('/', $segments));
 }
 
-function rss_feed_fetch_once(string $url, int $timeoutSec): ?array
+function rss_http_fetch_once(string $url, int $timeoutSec, int $maxBytes): ?array
 {
     if (!function_exists('curl_init')) {
         return null;
     }
+
     $parts = parse_url($url);
     if (!is_array($parts)) {
         return null;
     }
     $scheme = strtolower((string)($parts['scheme'] ?? ''));
-    $host = strtolower((string)($parts['host'] ?? ''));
+    $host = strtolower(trim((string)($parts['host'] ?? ''), '[]'));
     $port = isset($parts['port']) ? (int)$parts['port'] : ($scheme === 'https' ? 443 : 80);
-    $ips = rss_feed_resolve_public_ips($host);
-    if ($host === '' || $ips === []) {
+    if (!in_array($scheme, ['http', 'https'], true) || $host === '' || !in_array($port, [80, 443], true)) {
+        return null;
+    }
+
+    $ips = rss_resolve_public_ips($host);
+    if ($ips === []) {
         return null;
     }
 
@@ -254,11 +269,11 @@ function rss_feed_fetch_once(string $url, int $timeoutSec): ?array
         $options = [
             CURLOPT_RETURNTRANSFER => false,
             CURLOPT_FOLLOWLOCATION => false,
-            CURLOPT_CONNECTTIMEOUT => min(5, $timeoutSec),
-            CURLOPT_TIMEOUT => $timeoutSec,
-            CURLOPT_USERAGENT => 'PinkClubRSS/1.1',
-            CURLOPT_HTTPHEADER => ['Accept: application/rss+xml, application/atom+xml, application/xml, text/xml;q=0.9, */*;q=0.5'],
-            CURLOPT_ACCEPT_ENCODING => '',
+            CURLOPT_CONNECTTIMEOUT => max(1, min(4, $timeoutSec)),
+            CURLOPT_TIMEOUT => max(1, min(12, $timeoutSec)),
+            CURLOPT_USERAGENT => 'PinkClubRSS/1.1 (+https://pinkclub-sokumiru.com/)',
+            CURLOPT_HTTPHEADER => ['Accept: application/rss+xml, application/atom+xml, application/xml, text/xml, */*;q=0.5'],
+            CURLOPT_ENCODING => '',
             CURLOPT_SSL_VERIFYPEER => true,
             CURLOPT_SSL_VERIFYHOST => 2,
             CURLOPT_PROXY => '',
@@ -269,8 +284,8 @@ function rss_feed_fetch_once(string $url, int $timeoutSec): ?array
                 }
                 return strlen($header);
             },
-            CURLOPT_WRITEFUNCTION => static function ($curl, string $chunk) use (&$body, &$tooLarge): int {
-                if (strlen($body) + strlen($chunk) > 2097152) {
+            CURLOPT_WRITEFUNCTION => static function ($curl, string $chunk) use (&$body, &$tooLarge, $maxBytes): int {
+                if (strlen($body) + strlen($chunk) > $maxBytes) {
                     $tooLarge = true;
                     return 0;
                 }
@@ -285,7 +300,11 @@ function rss_feed_fetch_once(string $url, int $timeoutSec): ?array
         $ok = curl_exec($ch);
         $status = (int)curl_getinfo($ch, CURLINFO_RESPONSE_CODE);
         curl_close($ch);
-        if ($ok === false || $tooLarge) {
+
+        if ($tooLarge) {
+            return null;
+        }
+        if ($ok === false) {
             continue;
         }
         if ($status >= 300 && $status < 400 && $location !== '') {
@@ -299,34 +318,37 @@ function rss_feed_fetch_once(string $url, int $timeoutSec): ?array
     return null;
 }
 
-function rss_feed_fetch(string $url, int $timeoutSec): ?string
+function rss_http_fetch(string $url, int $timeoutSec = 4, int $maxBytes = 5242880, int $maxRedirects = 3): ?string
 {
-    $current = rss_feed_normalize_url($url);
+    $current = rss_http_url($url);
     if ($current === '') {
         return null;
     }
-    $timeoutSec = max(1, min(10, $timeoutSec));
+
     $seen = [];
-    for ($hop = 0; $hop <= 3; $hop++) {
+    for ($hop = 0; $hop <= max(0, min(5, $maxRedirects)); $hop++) {
         if (isset($seen[$current])) {
             return null;
         }
         $seen[$current] = true;
-        $result = rss_feed_fetch_once($current, $timeoutSec);
+
+        $result = rss_http_fetch_once($current, $timeoutSec, $maxBytes);
         if (!is_array($result)) {
             return null;
         }
-        if (isset($result['body'])) {
-            return (string)$result['body'];
+        if (isset($result['body']) && is_string($result['body'])) {
+            return $result['body'];
         }
-        if ($hop === 3) {
+        if ($hop >= $maxRedirects) {
             return null;
         }
-        $current = rss_feed_redirect_url($current, (string)($result['redirect'] ?? ''));
+
+        $current = rss_redirect_url($current, (string)($result['redirect'] ?? ''));
         if ($current === '') {
             return null;
         }
     }
+
     return null;
 }
 
@@ -340,12 +362,20 @@ function rss_fetch_source(int $sourceId, int $timeoutSec = 4): array
         return ['ok' => false, 'message' => 'source not found'];
     }
 
-    $xmlRaw = rss_feed_fetch((string)$source['feed_url'], $timeoutSec);
+    $feedUrl = rss_http_url((string)($source['feed_url'] ?? ''));
+    if ($feedUrl === '') {
+        return ['ok' => false, 'message' => 'unsafe feed url'];
+    }
+    $xmlRaw = rss_http_fetch($feedUrl, $timeoutSec, 5 * 1024 * 1024, 3);
     if (!is_string($xmlRaw) || $xmlRaw === '') {
         return ['ok' => false, 'message' => 'fetch failed'];
     }
+    if (stripos($xmlRaw, '<!DOCTYPE') !== false || stripos($xmlRaw, '<!ENTITY') !== false) {
+        return ['ok' => false, 'message' => 'unsafe xml'];
+    }
+
     $previousLibxmlState = libxml_use_internal_errors(true);
-    $xml = simplexml_load_string($xmlRaw, SimpleXMLElement::class, LIBXML_NONET | LIBXML_NOCDATA);
+    $xml = simplexml_load_string($xmlRaw, 'SimpleXMLElement', LIBXML_NONET | LIBXML_NOCDATA);
     libxml_clear_errors();
     libxml_use_internal_errors($previousLibxmlState);
     if ($xml === false) {
@@ -369,10 +399,20 @@ function rss_fetch_source(int $sourceId, int $timeoutSec = 4): array
 
     $insertWithoutImage = $pdo->prepare('INSERT IGNORE INTO rss_items (source_id,title,url,published_at,summary,guid,created_at) VALUES (:sid,:title,:url,:pub,:summary,:guid,NOW())');
 
+    $processedItems = 0;
     foreach ($items as $item) {
-        $guid = (string)($item->guid ?? $item->link ?? '');
-        if ($guid === '') {
+        if ($processedItems >= 200) {
+            break;
+        }
+        $processedItems++;
+
+        $link = rss_http_url((string)($item->link ?? ''));
+        if ($link === '') {
             continue;
+        }
+        $guid = trim((string)($item->guid ?? $link));
+        if ($guid === '') {
+            $guid = $link;
         }
 
         $categories = [];
@@ -404,12 +444,16 @@ function rss_fetch_source(int $sourceId, int $timeoutSec = 4): array
             continue;
         }
 
-        $imageUrl = rss_extract_first_image_url($item);
+        $imageUrl = rss_http_url(rss_extract_first_image_url($item));
+        $publishedTimestamp = strtotime((string)($item->pubDate ?? ''));
+        if ($publishedTimestamp === false || $publishedTimestamp <= 0) {
+            $publishedTimestamp = time();
+        }
         $params = [
             ':sid' => $sourceId,
             ':title' => mb_substr((string)($item->title ?? ''), 0, 255),
-            ':url' => mb_substr((string)($item->link ?? ''), 0, 500),
-            ':pub' => date('Y-m-d H:i:s', strtotime((string)($item->pubDate ?? 'now'))),
+            ':url' => mb_substr($link, 0, 500),
+            ':pub' => date('Y-m-d H:i:s', $publishedTimestamp),
             ':summary' => mb_substr(strip_tags((string)($item->description ?? '')), 0, 2000),
             ':guid' => mb_substr($guid, 0, 500),
         ];
@@ -464,7 +508,7 @@ function rss_ensure_tables(): void
     }
     if (!rss_table_column_exists('partner_rss', 'show_rss')) {
         try {
-            $pdo->exec('ALTER TABLE partner_rss ADD COLUMN show_rss TINYINT(1) NOT NULL DEFAULT 0');
+            $pdo->exec('ALTER TABLE partner_rss ADD COLUMN show_rss TINYINT(1) NOT NULL DEFAULT 1');
         } catch (Throwable) {
         }
     }
@@ -477,7 +521,7 @@ function rss_ensure_tables(): void
 function rss_sync_partner_sources(): void
 {
     $pdo = db();
-    $partnerFeeds = $pdo->query('SELECT pr.id AS rss_id, ps.name, pr.feed_url, COALESCE(pr.show_rss, 0) AS rss_enabled FROM partner_rss pr INNER JOIN partner_sites ps ON ps.id = pr.partner_site_id')->fetchAll(PDO::FETCH_ASSOC) ?: [];
+    $partnerFeeds = $pdo->query('SELECT pr.id AS rss_id, ps.name, pr.feed_url, COALESCE(pr.show_rss, pr.is_enabled, 1) AS rss_enabled FROM partner_rss pr INNER JOIN partner_sites ps ON ps.id = pr.partner_site_id')->fetchAll(PDO::FETCH_ASSOC) ?: [];
     $find = $pdo->prepare('SELECT id FROM rss_sources WHERE feed_url = :feed LIMIT 1');
     $insert = $pdo->prepare('INSERT INTO rss_sources(name,feed_url,source_type,source_ref_id,is_enabled,created_at,updated_at) VALUES(:name,:feed,"partner_link",:ref,:enabled,NOW(),NOW())');
     $update = $pdo->prepare('UPDATE rss_sources SET name=:name,source_type="partner_link",source_ref_id=:ref,is_enabled=:enabled,updated_at=NOW() WHERE id=:id');
@@ -493,7 +537,7 @@ function rss_sync_partner_sources(): void
             $seenIds[] = $rssId;
         }
         $name = trim((string)($feed['name'] ?? 'RSS'));
-        $enabled = (int)($feed['rss_enabled'] ?? 0) === 1 ? 1 : 0;
+        $enabled = (int)($feed['rss_enabled'] ?? 0) === 1 && rss_http_url($feedUrl) !== '' ? 1 : 0;
         $find->execute([':feed' => $feedUrl]);
         $id = (int)($find->fetchColumn() ?: 0);
         if ($id > 0) {
@@ -535,7 +579,7 @@ function rss_refresh_stale_sources(int $maxSources = 1, int $staleAfterSec = 900
 function rss_widget_bootstrap(bool $syncSources = true): void
 {
     static $bootstrapped = false;
-    if ($bootstrapped) {
+    if (!$syncSources || $bootstrapped) {
         return;
     }
     $bootstrapped = true;
@@ -590,6 +634,7 @@ function rss_pick_display_items(int $limit, bool $requireImage = false, int $day
     }
 
     $days = max(1, $days);
+    $scanLimit = max($limit, min(2000, $limit * 10));
     $pdo = db();
     $rows = [];
 
@@ -597,22 +642,24 @@ function rss_pick_display_items(int $limit, bool $requireImage = false, int $day
         . 'FROM rss_items ri '
         . 'INNER JOIN rss_sources rs ON rs.id = ri.source_id '
         . 'WHERE rs.is_enabled = 1 AND rs.source_type = "partner_link" AND ri.published_at >= DATE_SUB(NOW(), INTERVAL :days DAY) '
-        . 'ORDER BY ri.published_at DESC, ri.id DESC';
+        . 'ORDER BY ri.published_at DESC, ri.id DESC LIMIT :scan_limit';
 
     $sqlWithoutImage = 'SELECT ri.source_id, rs.name AS source_name, ri.title, ri.url, ri.guid, ri.published_at '
         . 'FROM rss_items ri '
         . 'INNER JOIN rss_sources rs ON rs.id = ri.source_id '
         . 'WHERE rs.is_enabled = 1 AND rs.source_type = "partner_link" AND ri.published_at >= DATE_SUB(NOW(), INTERVAL :days DAY) '
-        . 'ORDER BY ri.published_at DESC, ri.id DESC';
+        . 'ORDER BY ri.published_at DESC, ri.id DESC LIMIT :scan_limit';
 
     try {
         $stmt = $pdo->prepare($sqlWithImage);
         $stmt->bindValue(':days', $days, PDO::PARAM_INT);
+        $stmt->bindValue(':scan_limit', $scanLimit, PDO::PARAM_INT);
         $stmt->execute();
         $rows = $stmt->fetchAll(PDO::FETCH_ASSOC);
     } catch (Throwable $e) {
         $stmt = $pdo->prepare($sqlWithoutImage);
         $stmt->bindValue(':days', $days, PDO::PARAM_INT);
+        $stmt->bindValue(':scan_limit', $scanLimit, PDO::PARAM_INT);
         $stmt->execute();
         $rows = $stmt->fetchAll(PDO::FETCH_ASSOC);
     }
@@ -631,14 +678,18 @@ function rss_pick_display_items(int $limit, bool $requireImage = false, int $day
             continue;
         }
 
-        $imageUrl = trim((string)($row['image_url'] ?? ''));
+        $itemLink = rss_http_url((string)($row['url'] ?? ''));
+        if ($itemLink === '') {
+            continue;
+        }
+        $imageUrl = rss_http_url((string)($row['image_url'] ?? ''));
         if ($requireImage && $imageUrl === '') {
             continue;
         }
 
         $item = [
             'title' => (string)($row['title'] ?? ''),
-            'link' => (string)($row['url'] ?? ''),
+            'link' => $itemLink,
             'guid' => (string)($row['guid'] ?? ''),
             'published_at' => (string)($row['published_at'] ?? ''),
             'image_url' => $imageUrl,

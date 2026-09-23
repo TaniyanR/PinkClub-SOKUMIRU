@@ -19,7 +19,7 @@ require __DIR__ . '/includes/header.php';
 ?>
 <section class="card">
   <h1>cron設定</h1>
-  <p class="admin-form-note">PinkClub SOKUMIRUの商品などを自動更新するための設定です。</p>
+  <p class="admin-form-note">PinkClub SOKUMIRUの商品などを自動更新するための設定です。複数サイトを同じサーバーで運用する場合は、実行分を重ねないでください。</p>
 
   <?php if (!$cronTargetExists): ?>
     <p class="admin-form-note"><strong>警告:</strong> 実行対象ファイル <code><?= e($cronTargetFile) ?></code> が見つかりません。設置ファイルを確認してください。</p>
@@ -33,6 +33,7 @@ require __DIR__ . '/includes/header.php';
       <li>下記のコマンドを<strong>どちらか1つだけ</strong>コピーして登録します。</li>
     </ol>
     <p class="admin-form-note" style="margin-bottom:0;"><strong>2つを同時に登録しないでください。</strong>同じ自動更新が二重に動いてしまいます。</p>
+    <p class="admin-form-note" style="margin-bottom:0;">このサイトは毎時3分・33分など、他サイトと15分以上ずらした実行時刻を推奨します。</p>
   </div>
 
   <h2>1. 正式な実行コマンド</h2>

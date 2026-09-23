@@ -7,52 +7,88 @@ auth_require_admin();
 $title = '個人設定';
 $message = null;
 $error = null;
-$adminId = (int)(auth_user()['id'] ?? 0);
-$stmt = db()->prepare('SELECT username, email, password_hash, initial_setup_completed FROM admins WHERE id=:id LIMIT 1');
-$stmt->execute([':id' => $adminId]);
-$account = $stmt->fetch(PDO::FETCH_ASSOC);
-if (!is_array($account)) { auth_logout(); app_redirect(LOGIN_PATH); }
-$initial = !(bool)$account['initial_setup_completed'];
+$admin = auth_user();
+$adminId = is_array($admin) ? (int)($admin['id'] ?? 0) : 0;
+$currentLoginId = is_array($admin) ? trim((string)($admin['username'] ?? '')) : '';
+$credentialsPersonalized = auth_credentials_are_personalized();
+$requiresCredentialReplacement = !$credentialsPersonalized || strcasecmp($currentLoginId, 'admin') === 0;
 
 if ($_SERVER['REQUEST_METHOD'] === 'POST') {
     csrf_validate_or_fail((string)post('_csrf', ''));
-    $username = trim((string)post('username', ''));
-    $email = strtolower(trim((string)post('email', '')));
+
+    $loginId = trim((string)post('login_id', ''));
+    $email = trim((string)post('email', ''));
     $currentPassword = (string)post('current_password', '');
     $password = (string)post('password', '');
-    $confirm = (string)post('password_confirm', '');
+    $passwordConfirm = (string)post('password_confirm', '');
 
-    if (!password_verify($currentPassword, (string)$account['password_hash'])) {
+    $loginIdError = auth_login_id_validation_error($loginId);
+    $passwordError = $password !== '' ? auth_password_validation_error($password, $loginId) : null;
+
+    if ($loginIdError !== null) {
+        $error = $loginIdError;
+    } elseif ($email === '' || !filter_var($email, FILTER_VALIDATE_EMAIL)) {
+        $error = 'メールアドレスの形式が正しくありません。';
+    } elseif (!auth_verify_password_for_user($adminId, $currentPassword)) {
         $error = '現在のパスワードが正しくありません。';
-    } elseif ($username === '' || ($initial && strcasecmp($username, 'admin') === 0)) {
-        $error = 'ログインIDを admin 以外に変更してください。';
-    } elseif (!filter_var($email, FILTER_VALIDATE_EMAIL)) {
-        $error = '有効な再設定用メールアドレスを入力してください。';
-    } elseif (($initial || $password !== '') && strlen($password) < 12) {
-        $error = '新しいパスワードは12文字以上で入力してください。';
-    } elseif ($password !== $confirm) {
-        $error = '新しいパスワードの確認が一致しません。';
-    } elseif ($password !== '' && (strcasecmp($password, $username) === 0 || in_array(strtolower($password), ['admin', 'password'], true))) {
-        $error = 'ログインID、admin、password と同じパスワードは使用できません。';
+    } elseif (($requiresCredentialReplacement || strcasecmp($currentPassword, 'password') === 0) && $password === '') {
+        $error = '初回の認証設定では、新しいパスワードも設定してください。';
+    } elseif ($passwordError !== null) {
+        $error = $passwordError;
+    } elseif ($password !== $passwordConfirm) {
+        $error = '確認用パスワードが一致しません。';
+    } elseif ($adminId <= 0) {
+        $error = '管理者情報を確認できません。';
     } else {
-        $duplicate = db()->prepare('SELECT 1 FROM admins WHERE username=:username AND id<>:id LIMIT 1');
-        $duplicate->execute([':username' => $username, ':id' => $adminId]);
-        if ($duplicate->fetchColumn() !== false) {
-            $error = 'このログインIDは使用されています。';
-        } else {
-            $sql = 'UPDATE admins SET username=:username,email=:email,initial_setup_completed=1,session_version=session_version+1';
-            $params = [':username' => $username, ':email' => $email, ':id' => $adminId];
-            if ($password !== '') { $sql .= ',password_hash=:hash'; $params[':hash'] = password_hash($password, PASSWORD_DEFAULT); }
-            $sql .= ',updated_at=NOW() WHERE id=:id';
-            db()->prepare($sql)->execute($params);
-            site_setting_set('site.admin_email', $email);
-            session_regenerate_id(true);
-            $_SESSION['admin']['username'] = $username;
-            $_SESSION['admin']['initial_setup_completed'] = true;
-            $_SESSION['admin']['session_version'] = (int)($_SESSION['admin']['session_version'] ?? 1) + 1;
-            $account['username'] = $username; $account['email'] = $email; $account['initial_setup_completed'] = 1;
-            $initial = false;
-            $message = '個人設定を保存しました。';
+        $stmt = db()->prepare('SELECT id FROM admins WHERE username=:username AND id<>:id LIMIT 1');
+        $stmt->execute([
+            ':username' => $loginId,
+            ':id' => $adminId,
+        ]);
+        if ($stmt->fetchColumn() !== false) {
+            $error = 'このログインIDは使用できません。';
+        }
+
+        if ($error === null) {
+            $pdo = db();
+            $saved = false;
+            try {
+                $pdo->beginTransaction();
+                site_setting_set('site.admin_email', $email);
+                site_setting_set('auth.credentials_personalized', '1');
+                site_setting_set('auth.admin_user_id', (string)$adminId);
+                site_setting_set('auth.login_id', $loginId);
+
+                $updateSql = 'UPDATE admins SET username=:username, updated_at=NOW()';
+                $updateParams = [':username' => $loginId, ':id' => $adminId];
+                if ($password !== '') {
+                    $updateSql .= ', password_hash=:password_hash';
+                    $updateParams[':password_hash'] = password_hash($password, PASSWORD_DEFAULT);
+                }
+                $updateSql .= ' WHERE id=:id LIMIT 1';
+                $pdo->prepare($updateSql)->execute($updateParams);
+
+                // Older installations could recreate a second admin/password
+                // account after the real account was renamed. Remove it once
+                // personalized credentials have been saved.
+                $pdo->prepare("DELETE FROM admins WHERE username = 'admin' AND id <> :id")
+                    ->execute([':id' => $adminId]);
+                $pdo->commit();
+                $saved = true;
+            } catch (Throwable $e) {
+                if ($pdo->inTransaction()) {
+                    $pdo->rollBack();
+                }
+                $error = '認証設定を保存できませんでした。時間をおいてもう一度お試しください。';
+            }
+
+            if ($saved) {
+                $_SESSION['admin']['username'] = $loginId;
+                $currentLoginId = $loginId;
+                $credentialsPersonalized = true;
+                $requiresCredentialReplacement = false;
+                $message = 'ログインID、再設定用メールアドレス、パスワード設定を保存しました。';
+            }
         }
     }
 }
@@ -61,17 +97,35 @@ require __DIR__ . '/includes/header.php';
 ?>
 <section class="admin-card admin-card--form">
   <h1>個人設定</h1>
-  <?php if ($initial): ?><p class="flash error" role="alert">安全のため、初回ログイン設定を完了してください。</p><?php endif; ?>
-  <?php if ($message): ?><p class="flash success" role="status"><?= e($message) ?></p><?php endif; ?>
-  <?php if ($error): ?><p class="flash error" role="alert"><?= e($error) ?></p><?php endif; ?>
+  <?php if ($message !== null): ?><p class="flash success"><?= e($message) ?></p><?php endif; ?>
+  <?php if ($error !== null): ?><p class="flash error"><?= e($error) ?></p><?php endif; ?>
+  <?php if ($requiresCredentialReplacement): ?>
+    <p class="flash error">初期認証のままです。ログインID・再設定用メールアドレス・新しいパスワードを設定してください。</p>
+  <?php endif; ?>
   <form method="post" style="max-width:760px;">
     <?= csrf_input() ?>
-    <label>ログインID<input name="username" value="<?= e((string)$account['username']) ?>" required autocomplete="username"></label>
-    <label>パスワード再設定用メールアドレス<input type="email" name="email" value="<?= e((string)($account['email'] ?? '')) ?>" required autocomplete="email"></label>
-    <label>現在のパスワード<input type="password" name="current_password" required autocomplete="current-password"></label>
-    <label>新しいパスワード<input type="password" name="password" minlength="12" <?= $initial ? 'required' : '' ?> autocomplete="new-password"></label>
-    <label>新しいパスワード（確認）<input type="password" name="password_confirm" minlength="12" <?= $initial ? 'required' : '' ?> autocomplete="new-password"></label>
-    <div class="admin-actions"><button type="submit">保存</button></div>
+    <label>ログインID
+      <input type="text" name="login_id" value="<?= e($currentLoginId) ?>" minlength="4" maxlength="50" autocomplete="username" required>
+      <small>管理画面へのログインに使用します。「admin」は使用できません。</small>
+    </label>
+    <label>再設定用メールアドレス
+      <input type="email" name="email" value="<?= e(setting_admin_email('')) ?>">
+      <small>パスワードを忘れた場合の再設定メール送信先です。</small>
+    </label>
+    <label>現在のパスワード
+      <input type="password" name="current_password" autocomplete="current-password" required>
+      <small>認証情報を変更するために必要です。</small>
+    </label>
+    <label>新しいパスワード
+      <input type="password" name="password" minlength="12" autocomplete="new-password"<?= $requiresCredentialReplacement ? ' required' : '' ?>>
+      <small>12文字以上。「password」およびログインIDと同じ文字列は使用できません。</small>
+    </label>
+    <label>新しいパスワード（確認）
+      <input type="password" name="password_confirm" minlength="12" autocomplete="new-password"<?= $requiresCredentialReplacement ? ' required' : '' ?>>
+    </label>
+    <div class="admin-actions">
+      <button type="submit">保存</button>
+    </div>
   </form>
 </section>
 <?php require __DIR__ . '/includes/footer.php'; ?>

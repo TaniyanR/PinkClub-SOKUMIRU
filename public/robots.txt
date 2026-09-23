@@ -2,7 +2,12 @@ User-agent: *
 Disallow: /admin/
 Disallow: /public/forgot_password.php
 Disallow: /public/reset_password.php
-Disallow: /out.php
-Disallow: /public/out.php
+Disallow: /actress_profile.php
+Disallow: /public/actress_profile.php
+Disallow: /maker_resolve.php
+Disallow: /public/maker_resolve.php
+Disallow: /out.php?to=
+Disallow: /public/out.php?to=
 Disallow: /vr_affiliate.php
 Disallow: /public/vr_affiliate.php
+Sitemap: https://pinkclub-sokumiru.com/sitemap.php

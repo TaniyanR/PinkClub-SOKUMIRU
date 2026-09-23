@@ -22,94 +22,125 @@ if (($_SERVER['REQUEST_METHOD'] ?? 'GET') === 'POST') {
             $message = 'メールアドレスの形式を確認してください。';
             $messageType = 'error';
         } else {
-            $stmt = db()->prepare('SELECT id, username, email FROM admins WHERE email=:email LIMIT 1');
-            $stmt->execute([':email' => strtolower($email)]);
-            $admin = $stmt ? $stmt->fetch(PDO::FETCH_ASSOC) : false;
-
-            if (is_array($admin) && db_table_exists('admin_password_resets')) {
-                $resetCode = bin2hex(random_bytes(32));
-                $tokenStored = false;
-                $pdo = db();
-                try {
-                    $pdo->beginTransaction();
-                    $pdo->prepare('UPDATE admin_password_resets SET used_at=NOW() WHERE admin_user_id=:id AND used_at IS NULL')
-                        ->execute([':id' => (int)$admin['id']]);
-                    $pdo->prepare('INSERT INTO admin_password_resets(admin_user_id,token_hash,expires_at) VALUES (:admin_user_id,:token_hash,DATE_ADD(NOW(), INTERVAL 1 HOUR))')
-                        ->execute([
-                            ':admin_user_id' => (int)$admin['id'],
-                            ':token_hash' => hash('sha256', $resetCode),
-                        ]);
-                    $pdo->commit();
-                    $tokenStored = true;
-                } catch (Throwable $e) {
-                    if ($pdo->inTransaction()) {
-                        $pdo->rollBack();
-                    }
-                    error_log('[password reset] token creation failed: ' . $e->getMessage());
+            $mailAttempted = false;
+            $mailSent = false;
+            $mailBodyForLog = '';
+            $fromEmailForLog = 'noreply@pinkclub-sokumiru.com';
+            $registeredEmail = setting_admin_email('');
+            if ($registeredEmail !== '' && hash_equals($registeredEmail, $email)) {
+                $configuredAdminId = (int)site_setting_get('auth.admin_user_id', '0');
+                $configuredLoginId = trim(site_setting_get('auth.login_id', ''));
+                if ($configuredAdminId > 0) {
+                    $stmt = db()->prepare('SELECT id, username FROM admins WHERE id=:id LIMIT 1');
+                    $stmt->execute([':id' => $configuredAdminId]);
+                } elseif ($configuredLoginId !== '') {
+                    $stmt = db()->prepare('SELECT id, username FROM admins WHERE username=:username LIMIT 1');
+                    $stmt->execute([':username' => $configuredLoginId]);
+                } else {
+                    $stmt = db()->query("SELECT id, username FROM admins ORDER BY (username = 'admin') ASC, id ASC LIMIT 1");
                 }
+                $admin = $stmt ? $stmt->fetch(PDO::FETCH_ASSOC) : false;
+                if (is_array($admin) && db_table_exists('admin_password_resets')) {
+                    $resetCode = bin2hex(random_bytes(32));
+                    $tokenStored = false;
+                    $pdo = db();
+                    $pdo->beginTransaction();
+                    try {
+                        $pdo->prepare('UPDATE admin_password_resets SET used_at=NOW() WHERE admin_user_id=:admin_user_id AND used_at IS NULL')
+                            ->execute([':admin_user_id' => (int)$admin['id']]);
+                        $pdo->prepare('INSERT INTO admin_password_resets(admin_user_id,token_hash,expires_at) VALUES (:admin_user_id,:token_hash,DATE_ADD(NOW(), INTERVAL 1 HOUR))')
+                            ->execute([
+                                ':admin_user_id' => (int)$admin['id'],
+                                ':token_hash' => hash('sha256', $resetCode),
+                            ]);
+                        $pdo->commit();
+                        $tokenStored = true;
+                    } catch (Throwable $e) {
+                        if ($pdo->inTransaction()) {
+                            $pdo->rollBack();
+                        }
+                        error_log('password reset token creation failed: ' . $e->getMessage());
+                    }
 
-                if ($tokenStored) {
-                    $resetUrl = public_url('reset_password.php');
-                    $body = "管理者パスワード再設定の申請を受け付けました。\n\n"
-                        . "ユーザー名: " . (string)$admin['username'] . "\n"
-                        . "再設定ページ: " . $resetUrl . "\n"
-                        . "再設定コード: " . $resetCode . "\n\n"
-                        . "再設定ページを開き、このコードを入力してください。\n"
-                        . "コードは1時間で期限切れになり、一度使用すると無効になります。";
-                    @mail($email, '[' . site_setting_get('site.name', APP_NAME) . '] パスワード再設定', $body);
+                    if ($tokenStored) {
+                        $resetUrl = public_url('reset_password.php');
+                        $body = "管理者パスワード再設定の申請を受け付けました。\n\n"
+                            . "ログインID: " . (string)$admin['username'] . "\n"
+                            . "再設定ページ: " . $resetUrl . "\n"
+                            . "再設定コード: " . $resetCode . "\n\n"
+                            . "コードの有効期限は1時間で、一度使用すると無効になります。\n"
+                            . "申請した覚えがない場合は、このメールを破棄してください。";
+                        $host = (string)(parse_url(app_url(), PHP_URL_HOST) ?: 'pinkclub-sokumiru.com');
+                        $host = preg_replace('/[^a-z0-9.-]/i', '', $host) ?: 'pinkclub-sokumiru.com';
+                        $fromEmail = 'noreply@' . preg_replace('/^www\./i', '', $host);
+                        $fromEmailForLog = $fromEmail;
+                        $subject = '[PinkClub-SOKUMIRU] パスワード再設定';
+                        $encodedSubject = function_exists('mb_encode_mimeheader')
+                            ? mb_encode_mimeheader($subject, 'UTF-8')
+                            : $subject;
+                        $headers = "From: PinkClub-SOKUMIRU <{$fromEmail}>\r\nContent-Type: text/plain; charset=UTF-8";
+                        $mailAttempted = true;
+                        $mailBodyForLog = $body;
+                        $mailSent = @mail($email, $encodedSubject, $body, $headers);
+                    } else {
+                        $mailSent = false;
+                    }
                 }
             }
 
-            // アカウントの存在やメール送信結果を第三者へ知らせない。
-            $message = '入力情報を受け付けました。登録情報と一致する場合は再設定案内を送信しました。';
+            if ($mailAttempted) {
+                try {
+                    db()->prepare('INSERT INTO mail_logs(direction,from_name,from_email,to_email,subject,body,status,last_error,created_at,updated_at) VALUES ("out",NULL,:from,:to,:subj,:body,:status,:err,NOW(),NOW())')
+                        ->execute([
+                            ':from' => $fromEmailForLog,
+                            ':to' => $email,
+                            ':subj' => 'Password Reset',
+                            ':body' => preg_replace('/再設定コード:\s*[a-f0-9]{64}/u', '再設定コード: [REDACTED]', $mailBodyForLog),
+                            ':status' => $mailSent ? 'sent' : 'failed',
+                            ':err' => $mailSent ? null : 'mail() returned false',
+                        ]);
+                } catch (Throwable) {
+                }
+            }
+
+            // アカウントの存在とメール送信結果を第三者へ知らせない。
+            $message = '入力情報を受け付けました。登録情報と一致する場合は、数分以内に再設定メールが届きます。';
             $messageType = 'success';
         }
     }
 }
 
-if (headers_sent() === false) {
-    header('X-Robots-Tag: noindex, nofollow');
-    header('Cache-Control: no-store, max-age=0');
-    header('Referrer-Policy: no-referrer');
-}
-
-$faviconPath = trim(site_setting_get('site.favicon_path', ''));
-$faviconUrl = $faviconPath !== '' ? public_versioned_url($faviconPath) : '';
-$faviconType = strtolower((string)pathinfo($faviconPath, PATHINFO_EXTENSION)) === 'png' ? 'image/png' : 'image/x-icon';
+$pageTitle = 'パスワード再設定メール';
+$hideLoginHeaderBrand = true;
+include __DIR__ . '/partials/login_header.php';
 ?>
-<!doctype html>
-<html lang="ja">
-<head>
-  <meta charset="UTF-8">
-  <meta name="viewport" content="width=device-width, initial-scale=1.0">
-  <meta name="robots" content="noindex, nofollow">
-  <title>パスワード再発行 | PinkClub SOKUMIRU</title>
-  <?php if ($faviconUrl !== ''): ?>
-    <link rel="icon" href="<?= e($faviconUrl) ?>" sizes="any" type="<?= e($faviconType) ?>">
-    <link rel="shortcut icon" href="<?= e($faviconUrl) ?>" type="<?= e($faviconType) ?>">
-    <link rel="apple-touch-icon" href="<?= e($faviconUrl) ?>">
-  <?php endif; ?>
-  <link rel="stylesheet" href="../assets/css/style.css">
-</head>
-<body class="login-page">
-  <main class="login-wrap">
-    <section class="login-card">
-      <h1 class="login-title">PinkClub SOKUMIRU</h1>
-      <p class="login-subtitle">パスワード再発行</p>
+<div class="login-wrap login-wrap--reset">
+  <section class="login-card login-card--reset" aria-labelledby="forgot-password-title">
+    <div class="login-brand-mark" aria-hidden="true">鍵</div>
+    <p class="login-eyebrow">管理画面の認証</p>
+    <h1 id="forgot-password-title" class="login-title">パスワードを再設定</h1>
+    <p class="login-subtitle">個人設定に登録したメールアドレスを入力してください。有効期限1時間・一度限りの再設定コードを送信します。</p>
 
-      <?php if ($message !== '') : ?><p class="<?= $messageType === 'error' ? 'alert alert-error' : 'alert alert-success' ?>"><?php echo e($message); ?></p><?php endif; ?>
-      <form method="post" class="login-form">
-        <input type="hidden" name="_token" value="<?php echo e(csrf_token()); ?>">
-        <label class="login-label">
-          登録メールアドレス
-          <input class="login-input" name="email" type="email" autocomplete="email" required>
-        </label>
-        <button class="login-button" type="submit">再設定メールを送る</button>
-      </form>
+    <?php if ($message !== ''): ?>
+      <div class="alert alert-<?= e($messageType) ?>" role="<?= $messageType === 'error' ? 'alert' : 'status' ?>"><?= e($message) ?></div>
+    <?php endif; ?>
 
-      <p class="login-note">メールには再設定ページのURLと、URLには含めない一度限りの再設定コードを記載します。</p>
-      <p class="login-note"><a href="login0718.php">ログインへ戻る</a></p>
-    </section>
-  </main>
-</body>
-</html>
+    <form method="post" class="login-form">
+      <input type="hidden" name="_token" value="<?= e(csrf_token()) ?>">
+      <label class="login-label">
+        登録メールアドレス
+        <input class="login-input" name="email" type="email" autocomplete="email" placeholder="name@example.com" required>
+      </label>
+      <button class="login-button" type="submit">再設定メールを送信</button>
+    </form>
+
+    <ol class="login-reset-steps" aria-label="再設定の流れ">
+      <li>メールを確認</li>
+      <li>再設定ページを開く</li>
+      <li>メールの再設定コードと新しいパスワードを入力</li>
+    </ol>
+    <p class="login-note">メールが届かない場合は、迷惑メールフォルダと管理画面の「個人設定」に登録したアドレスをご確認ください。</p>
+    <p class="login-back"><a href="<?= e(public_url('login0718.php')) ?>">ログイン画面へ戻る</a></p>
+  </section>
+</div>
+<?php include __DIR__ . '/partials/login_footer.php';

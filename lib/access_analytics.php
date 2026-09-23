@@ -11,6 +11,49 @@ function analytics_beacon_marker_hash(): string
     return hash('sha256', 'pinkclub-browser-beacon');
 }
 
+function analytics_beacon_token(string $path, ?int $issuedAt = null): string
+{
+    $issuedAt ??= time();
+    $path = analytics_normalize_beacon_path($path);
+    $visitor = analytics_visitor_hash((string)($_SERVER['HTTP_USER_AGENT'] ?? ''));
+    $secret = (string)config_get('security.ip_hash_salt', '');
+    if ($secret === '') {
+        $secret = hash('sha256', __DIR__ . '|' . (string)config_get('db.name', 'pinkclub') . '|pinkclub-beacon-token');
+    }
+    $signature = hash_hmac('sha256', $issuedAt . "\n" . $path . "\n" . $visitor, $secret);
+
+    return $issuedAt . '.' . $signature;
+}
+
+function analytics_normalize_beacon_path(string $rawPath): string
+{
+    $path = (string)parse_url($rawPath, PHP_URL_PATH);
+    if ($path === '' || $path[0] !== '/') {
+        $path = '/';
+    }
+    $queryParams = [];
+    parse_str((string)(parse_url($rawPath, PHP_URL_QUERY) ?? ''), $queryParams);
+    unset($queryParams['rank_period']);
+    $query = http_build_query($queryParams);
+
+    return mb_substr($path . ($query !== '' ? '?' . $query : ''), 0, 255);
+}
+
+function analytics_beacon_token_is_valid(string $token, string $path): bool
+{
+    if (preg_match('/^(\d{10})\.([a-f0-9]{64})$/', $token, $matches) !== 1) {
+        return false;
+    }
+    $issuedAt = (int)$matches[1];
+    // A real page keeps the beacon for a short dwell time. Reject immediate
+    // endpoint probes and stale tokens copied by traffic generators.
+    if ($issuedAt > time() - 2 || $issuedAt < time() - 1800) {
+        return false;
+    }
+
+    return hash_equals(analytics_beacon_token($path, $issuedAt), $token);
+}
+
 
 function analytics_request_is_automated(?string $userAgent = null): bool
 {
@@ -100,9 +143,9 @@ function analytics_visitor_hash(string $ua): string
     return hash_hmac('sha256', $ip, $salt);
 }
 
-function analytics_maybe_cleanup_old_logs(int $retentionDays = 730, int $batchSize = 2000, bool $forceCheck = false): void
+function analytics_maybe_cleanup_old_logs(int $retentionDays = 730, int $batchSize = 2000): void
 {
-    if (!$forceCheck && mt_rand(1, 20) !== 1) {
+    if (mt_rand(1, 20) !== 1) {
         return;
     }
 
@@ -166,19 +209,14 @@ function analytics_track_beacon(): void
     if (analytics_request_is_automated($ua)) {
         return;
     }
-    $hash = analytics_visitor_hash($ua);
     $rawPath = (string)($_POST['path'] ?? '/');
-    $path = (string)parse_url($rawPath, PHP_URL_PATH);
-    if ($path === '' || $path[0] !== '/') {
-        $path = '/';
+    $token = trim((string)($_POST['token'] ?? ''));
+    if (!analytics_beacon_token_is_valid($token, $rawPath)) {
+        return;
     }
-
-    $queryParams = [];
-    parse_str((string)(parse_url($rawPath, PHP_URL_QUERY) ?? ''), $queryParams);
-    unset($queryParams['rank_period']);
-    $requestQuery = http_build_query($queryParams);
-    $pageKey = $path . ($requestQuery !== '' ? '?' . $requestQuery : '');
-    $pathForStats = mb_substr($pageKey, 0, 255);
+    $hash = analytics_visitor_hash($ua);
+    $path = (string)parse_url($rawPath, PHP_URL_PATH) ?: '/';
+    $pathForStats = analytics_normalize_beacon_path($rawPath);
     $today = date('Y-m-d');
     $referrer = (string)($_POST['referrer'] ?? '');
     $refererHost = parse_url($referrer, PHP_URL_HOST) ?: '';
@@ -191,8 +229,7 @@ function analytics_track_beacon(): void
            AND session_id_hash = :marker
            AND ip_hash = :visitor
            AND path = :path
-           AND created_at >= CURDATE()
-           AND created_at < CURDATE() + INTERVAL 1 DAY
+           AND created_at >= DATE_SUB(NOW(), INTERVAL 10 SECOND)
          LIMIT 1"
     );
     $duplicateStmt->execute([
@@ -204,8 +241,6 @@ function analytics_track_beacon(): void
         return;
     }
 
-    // キャッシュ復元・拡張機能・再送による同一PVの水増しを防ぐ。
-    // 同じ訪問者による同じURLは1日1回だけ集計する。
     $visitStmt = $pdo->prepare('INSERT IGNORE INTO visit_sessions(stat_date,visitor_hash,first_seen_at) VALUES(:d,:h,NOW())');
     $visitStmt->execute([':d' => $today, ':h' => $hash]);
     $isUniqueVisitor = $visitStmt->rowCount() === 1;
@@ -234,23 +269,25 @@ function analytics_track_beacon(): void
              LIMIT 1"
         );
         $inDuplicateStmt->execute([':visitor' => $hash, ':source' => $inSource]);
-        if ($inDuplicateStmt->fetchColumn() === false) {
-            $pdo->prepare(
-                "INSERT INTO site_events(event_type,path,referrer,ua_hash,ip_hash,session_id_hash,created_at)
-                 VALUES('in',:path,:source,NULL,:ip,:visitor,NOW())"
-            )->execute([
-                ':path' => mb_substr($path, 0, 255),
-                ':source' => $inSource,
-                ':ip' => $hash,
-                ':visitor' => $hash,
-            ]);
-            $pdo->prepare('INSERT INTO in_logs(created_at,ref_code,referer_host,path) VALUES(NOW(),:ref,:host,:path)')->execute([
-                ':ref' => $refCode,
-                ':host' => mb_substr((string)$refererHost, 0, 255),
-                ':path' => mb_substr($path, 0, 255),
-            ]);
-            $pdo->prepare('UPDATE daily_stats SET in_count = in_count + 1, updated_at = NOW() WHERE stat_date=:d')->execute([':d' => $today]);
+        if ($inDuplicateStmt->fetchColumn() !== false) {
+            analytics_maybe_cleanup_old_logs(730, 2000);
+            return;
         }
+        $pdo->prepare(
+            "INSERT INTO site_events(event_type,path,referrer,ua_hash,ip_hash,session_id_hash,created_at)
+             VALUES('in',:path,:source,NULL,:ip,:visitor,NOW())"
+        )->execute([
+            ':path' => mb_substr($path, 0, 255),
+            ':source' => $inSource,
+            ':ip' => $hash,
+            ':visitor' => $hash,
+        ]);
+        $pdo->prepare('INSERT INTO in_logs(created_at,ref_code,referer_host,path) VALUES(NOW(),:ref,:host,:path)')->execute([
+            ':ref' => $refCode,
+            ':host' => mb_substr((string)$refererHost, 0, 255),
+            ':path' => mb_substr($path, 0, 255),
+        ]);
+        $pdo->prepare('UPDATE daily_stats SET in_count = in_count + 1, updated_at = NOW() WHERE stat_date=:d')->execute([':d' => $today]);
     }
     } catch (Throwable $e) {
         analytics_disable_for_request($e);

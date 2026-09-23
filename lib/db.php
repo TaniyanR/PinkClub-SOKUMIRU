@@ -153,12 +153,6 @@ function db_can_connect(): bool
 /**
  * @param PDO|string $pdoOrTable
  */
-function db_clear_metadata_cache(): void
-{
-    $GLOBALS['__db_metadata_generation'] = (int)($GLOBALS['__db_metadata_generation'] ?? 0) + 1;
-    unset($GLOBALS['__site_settings_columns']);
-}
-
 function db_table_exists($pdoOrTable, ?string $table = null): bool
 {
     $cache = &$GLOBALS['__db_table_exists'];

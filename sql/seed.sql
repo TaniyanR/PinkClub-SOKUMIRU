@@ -1,1 +1,2 @@
--- 初期管理者は lib/installer.php が安全なランダムパスワードで作成します。
+-- 管理者は lib/installer.php でランダムな初期パスワードを使って作成する。
+-- 固定値 admin / password をここで再作成してはならない。

@@ -1,7 +1,32 @@
 <?php
 declare(strict_types=1);
 ?>
-<section id="pcf-recently-viewed" class="pcf-recent" aria-labelledby="pcf-recent-title" data-endpoint="<?= e(public_url('recently_viewed_items.php')) ?>" hidden>
+<style>
+@media (min-width: 901px) {
+  .site-main--legacy .rail-section:not(.home-feature-section) > .rail-row--home-taxonomy {
+    display: grid !important;
+    grid-template-columns: repeat(4, minmax(0, 1fr)) !important;
+    gap: 16px !important;
+    flex-wrap: wrap !important;
+    overflow-x: visible !important;
+    overflow-y: visible !important;
+    padding-bottom: 10px;
+  }
+  .site-main--legacy .rail-section:not(.home-feature-section) > .rail-row--home-taxonomy .rail-card {
+    width: 100% !important;
+    min-width: 0 !important;
+    max-width: none !important;
+    flex: none !important;
+  }
+  .site-main--legacy .rail-section:not(.home-feature-section) > .rail-row--home-taxonomy .rail-card .thumb,
+  .site-main--legacy .rail-section:not(.home-feature-section) > .rail-row--home-taxonomy .rail-card .rail-card__noimage {
+    width: 100% !important;
+    max-width: 100% !important;
+    height: auto !important;
+  }
+}
+</style>
+<section id="pcf-recently-viewed" class="pcf-recent" aria-labelledby="pcf-recent-title" hidden>
   <div class="pcf-recent__heading">
     <div>
       <h2 id="pcf-recent-title">最近見た作品</h2>

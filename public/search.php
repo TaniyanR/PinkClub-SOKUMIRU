@@ -5,7 +5,6 @@ declare(strict_types=1);
 require_once __DIR__ . '/_bootstrap.php';
 require_once __DIR__ . '/partials/public_ui.php';
 require_once __DIR__ . '/../lib/repository.php';
-require_once __DIR__ . '/../lib/public_rankings.php';
 
 function search_item_has_product_source(array $item): bool
 {
@@ -197,15 +196,16 @@ function search_fetch_items(string $query, int $limit, int $offset): array
     $termWhere = [];
     foreach ($terms as $index => $term) {
         $titleParam = ':q_title_' . $index;
-        $rawParam = ':q_raw_json_' . $index;
         $contentParam = ':q_content_id_' . $index;
         $productParam = ':q_product_id_' . $index;
         $like = '%' . addcslashes($term, '\%_') . '%';
         $params[$titleParam] = $like;
-        $params[$rawParam] = $like;
         $params[$contentParam] = $term;
         $params[$productParam] = $term;
-        $termWhere[] = "(title LIKE {$titleParam} ESCAPE '\\\\' OR raw_json LIKE {$rawParam} ESCAPE '\\\\' OR content_id = {$contentParam} OR product_id = {$productParam})";
+        // raw_json is a large, unindexed column. Searching it for every public
+        // request caused some crawler requests to exceed the PHP execution
+        // limit and surface as 5xx in Search Console.
+        $termWhere[] = "(title LIKE {$titleParam} ESCAPE '\\\\' OR content_id = {$contentParam} OR product_id = {$productParam})";
     }
     $whereSql = '(' . implode(' OR ', $termWhere) . ')';
     $sourceWhere = function_exists('items_product_source_where') ? items_product_source_where() : '';
@@ -227,10 +227,14 @@ function search_fetch_items(string $query, int $limit, int $offset): array
             $chunkSize = max($limit + 1, 25);
             $cursor = 0;
             $targetCount = $offset + $limit + 1;
-            $maxLoops = 30;
+            $maxLoops = 8;
+            $deadline = microtime(true) + 2.5;
             $collected = [];
 
             for ($i = 0; $i < $maxLoops; $i++) {
+                if (microtime(true) >= $deadline) {
+                    break;
+                }
                 $stmt = db()->prepare('SELECT * FROM items WHERE ' . $whereSql . ' ORDER BY ' . $orderSql . ' LIMIT :l OFFSET :o');
                 foreach ($params as $paramName => $paramValue) {
                     $stmt->bindValue($paramName, $paramValue, PDO::PARAM_STR);
@@ -271,34 +275,6 @@ $offset = ($searchPage - 1) * $limit;
 $searchRows = search_fetch_items($searchQuery, $limit, $offset);
 [$searchItems, $searchHasNext] = paginate_items($searchRows, $limit);
 
-$searchRankingPeriod = trim((string)get('rank_period', 'daily'));
-$searchRankingTabs = [
-    'daily' => ['label' => '本日'],
-    'weekly' => ['label' => '週間'],
-    'monthly' => ['label' => '月間'],
-    'yearly' => ['label' => '年間'],
-];
-if (!isset($searchRankingTabs[$searchRankingPeriod])) {
-    $searchRankingPeriod = 'daily';
-}
-$searchRankingRows = $searchQuery !== ''
-    ? pcf_public_weighted_ranking('items', $searchRankingPeriod)
-    : [];
-$searchRankingTabUrlBuilder = static function (string $period) use ($searchQuery, $searchPage): string {
-    $query = [
-        'q' => $searchQuery,
-        'rank_period' => $period,
-    ];
-    if ($searchPage > 1) {
-        $query['page'] = $searchPage;
-    }
-    return public_url('search.php') . '?' . http_build_query($query) . '#access-ranking';
-};
-$searchRankingRowUrlBuilder = static function (array $row): string {
-    $itemId = (int)($row['id'] ?? 0);
-    return $itemId > 0 ? public_url('item.php') . '?id=' . rawurlencode((string)$itemId) : '';
-};
-
 $title = '検索結果';
 $pageDescription = $searchQuery !== '' ? mb_strimwidth('「' . $searchQuery . '」の商品検索結果です。', 0, 150, '…', 'UTF-8') : 'キーワードを入力して商品を検索できます。';
 $robotsMeta = 'noindex,follow';
@@ -318,12 +294,24 @@ if ($searchHasNext) {
 }
 require __DIR__ . '/partials/header.php';
 ?>
+<style>
+.pcf-search-grid{grid-template-columns:repeat(auto-fit,minmax(min(240px,100%),1fr))}
+@media (max-width:768px){
+  .pcf-search-grid{grid-template-columns:1fr;gap:18px}
+  .pcf-search-grid .pcf-dm-card{width:100%;max-width:none;box-sizing:border-box}
+  .pcf-search-grid .pcf-dm-card__image-link{display:block;width:100%;height:auto;min-height:0}
+  .pcf-search-grid .pcf-dm-card__image{display:block;width:100%;height:auto;max-height:none;object-fit:contain}
+  .pcf-search-grid .pcf-dm-card__title{font-size:16px;line-height:1.55;word-break:normal;overflow-wrap:anywhere}
+  .pcf-search-grid .pcf-dm-card__actions{gap:8px}
+  .pcf-search-grid .sample-button,.pcf-search-grid .pcf-btn{min-height:42px;box-sizing:border-box}
+}
+</style>
 <?php pcf_render_hero('検索結果', $searchQuery !== '' ? '「' . $searchQuery . '」の商品検索結果です。' : 'キーワードを入力して商品を検索できます。'); ?>
 
 <?php if ($searchQuery === ''): ?>
   <?php pcf_render_empty('検索キーワードを入力してください。'); ?>
 <?php elseif ($searchItems !== []): ?>
-  <section class="pcf-related-grid">
+  <section class="pcf-related-grid pcf-search-grid">
     <?php foreach ($searchItems as $item): ?>
       <?php pcf_render_item_card(is_array($item) ? $item : []); ?>
     <?php endforeach; ?>
@@ -341,14 +329,5 @@ require __DIR__ . '/partials/header.php';
   <?php pcf_render_empty('検索条件に一致する商品がありません。'); ?>
 <?php endif; ?>
 
-<?php if ($searchQuery !== ''): ?>
-  <?php pcf_render_item_access_ranking(
-      $searchRankingTabs,
-      $searchRankingPeriod,
-      $searchRankingTabUrlBuilder,
-      $searchRankingRows,
-      $searchRankingRowUrlBuilder
-  ); ?>
-<?php endif; ?>
-
+<?php pcf_render_sample_movie_modal(); ?>
 <?php require __DIR__ . '/partials/footer.php'; ?>

@@ -15,12 +15,74 @@ if ($publicScriptName === 'setup_check.php' && function_exists('setup_guard_enfo
 }
 
 $longCachePublicPages = [
-    'index.php','items.php','item.php','search.php','actresses.php','actress.php','genres.php','genre.php','makers.php','maker.php','series.php','series_list.php','series_detail.php','series_one.php','labels.php','label.php','authors.php','author.php','posts.php','post.php','page.php',
+    'index.php',
+    'items.php',
+    'item.php',
+    'search.php',
+    'actresses.php',
+    'actress.php',
+    'genres.php',
+    'genre.php',
+    'makers.php',
+    'maker.php',
+    'series.php',
+    'series_list.php',
+    'series_detail.php',
+    'series_one.php',
+    'labels.php',
+    'label.php',
+    'authors.php',
+    'author.php',
+    'posts.php',
+    'post.php',
+    'page.php',
 ];
 $publicPageCacheTtl = in_array($publicScriptName, $longCachePublicPages, true) ? 600 : 120;
 pcf_public_page_cache_start($publicPageCacheTtl);
 
+// Resolve the default social image only when the request is not already
+// satisfied by the public page cache. This keeps cached page hits from doing
+// an unnecessary database lookup.
+if ((!isset($ogImage) || !is_string($ogImage) || trim($ogImage) === '') && function_exists('site_media_public_url')) {
+    $defaultOgpImage = site_media_public_url('ogp');
+    if ($defaultOgpImage !== '') {
+        $ogImage = $defaultOgpImage;
+    }
+}
+
 $readOnlyPublicPages = [
-    'index.php','items.php','item.php','search.php','actresses.php','actresses_group.php','actress.php','genres.php','genre.php','makers.php','maker.php','maker_resolve.php','series.php','series_list.php','series_detail.php','series_one.php','labels.php','label.php','authors.php','author.php','posts.php','article.php','sample_images.php','recommendations.php','recent_items_validate.php','recently_viewed_items.php','ranking_refresh.php','analytics.php','analytics_token.php','analytics_engagement.php','page_view_beacon.php','out.php','vr_affiliate.php','feed.php','rss.php','rss_trade_fragment.php','social-image.php',
+    'index.php',
+    'items.php',
+    'item.php',
+    'search.php',
+    'actresses.php',
+    'actresses_group.php',
+    'actress.php',
+    'genres.php',
+    'genre.php',
+    'makers.php',
+    'maker.php',
+    'maker_resolve.php',
+    'series.php',
+    'series_list.php',
+    'series_detail.php',
+    'series_one.php',
+    'labels.php',
+    'label.php',
+    'authors.php',
+    'author.php',
+    'posts.php',
+    'article.php',
+    'sample_images.php',
+    'recommendations.php',
+    'ranking_refresh.php',
+    'analytics.php',
+    'page_view_beacon.php',
+    'out.php',
+    'vr_affiliate.php',
+    'feed.php',
+    'rss.php',
 ];
-if (session_status() === PHP_SESSION_ACTIVE && in_array($publicScriptName, $readOnlyPublicPages, true)) session_write_close();
+if (session_status() === PHP_SESSION_ACTIVE && in_array($publicScriptName, $readOnlyPublicPages, true)) {
+    session_write_close();
+}

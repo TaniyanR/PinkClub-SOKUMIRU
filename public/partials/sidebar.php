@@ -45,7 +45,7 @@ try {
 }
 
 try {
-    $stmt = db()->query('SELECT COUNT(DISTINCT pr.partner_site_id) FROM partner_rss pr INNER JOIN partner_sites ps ON ps.id = pr.partner_site_id WHERE pr.feed_url <> "" AND COALESCE(pr.show_rss, 0) = 1');
+    $stmt = db()->query('SELECT COUNT(DISTINCT pr.partner_site_id) FROM partner_rss pr INNER JOIN partner_sites ps ON ps.id = pr.partner_site_id WHERE pr.feed_url <> "" AND COALESCE(pr.show_rss, pr.is_enabled, 1) = 1');
     $textRssSiteCount = $stmt ? (int)$stmt->fetchColumn() : null;
 } catch (Throwable $e) {
     try {
@@ -86,18 +86,18 @@ if ($fixedPages === []) {
             <ul class="sidebar-links sidebar-links--pages">
                 <?php if ($sitePostCount !== null): ?><li><a style="color:#000;">公開作品数：<strong><?= e(number_format($sitePostCount)) ?></strong></a></li><?php endif; ?>
                 <?php if ($siteActressCount !== null): ?><li><a style="color:#000;">公開女優数：<strong><?= e(number_format($siteActressCount)) ?></strong></a></li><?php endif; ?>
-                <?php foreach ($fixedPages as $page): ?>
-                    <?php $pageHref = trim((string)($page['href'] ?? '')); ?>
+                <?php foreach ($fixedPages as $fixedPage): ?>
+                    <?php $pageHref = trim((string)($fixedPage['href'] ?? '')); ?>
                     <?php
                     if ($pageHref === '') {
-                        $pageSlug = (string)$page['slug'];
+                        $pageSlug = (string)$fixedPage['slug'];
                         if ($pageSlug === CONTACT_PAGE_OLD_SLUG) {
                             $pageSlug = CONTACT_PAGE_SLUG;
                         }
                         $pageHref = public_url('page.php?slug=' . $pageSlug);
                     }
                     ?>
-                    <li><a href="<?= e($pageHref) ?>"><?= e((string)$page['title']) ?></a></li>
+                    <li><a href="<?= e($pageHref) ?>"><?= e((string)$fixedPage['title']) ?></a></li>
                 <?php endforeach; ?>
             </ul>
         <?php endif; ?>

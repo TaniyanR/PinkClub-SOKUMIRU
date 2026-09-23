@@ -788,28 +788,51 @@ require __DIR__ . '/partials/header.php';
   <?php endif; ?>
 
 
-<?php pcf_render_item_access_ranking(
-      $accessRankingTabs,
-      $accessRankingPeriod,
-      static function (string $period) use ($id, $contentId, $cid): string {
-          $tabQuery = ['rank_period' => $period];
-          if ($id > 0) {
-              $tabQuery['id'] = (string)$id;
-          }
-          if ($contentId !== '') {
-              $tabQuery['content_id'] = $contentId;
-          }
-          if ($cid !== '') {
-              $tabQuery['cid'] = $cid;
-          }
-          return public_url('item.php') . '?' . http_build_query($tabQuery) . '#access-ranking';
-      },
-      $accessRankingRows,
-      static function (array $row): string {
-          $itemId = (int)($row['id'] ?? 0);
-          return $itemId > 0 ? public_url('item.php') . '?id=' . rawurlencode((string)$itemId) : '';
+  <section id="access-ranking" class="block pcf-item-ranking">
+    <div class="pcf-item-ranking__heading">
+      <div>
+        <p class="pcf-item-ranking__eyebrow">ACCESS RANKING</p>
+        <h2 class="section-title">人気の作品ランキング</h2>
+      </div>
+      <p class="pcf-item-ranking__description">閲覧数と元サイトへのアクセスをもとに集計しています。</p>
+    </div>
+  <nav class="pcf-item-ranking__tabs" aria-label="ランキング期間">
+    <?php foreach ($accessRankingTabs as $tabKey => $tabConfig): ?>
+      <?php
+      $tabQuery = ['rank_period' => (string)$tabKey];
+      if ($id > 0) {
+          $tabQuery['id'] = (string)$id;
       }
-  ); ?>
+      if ($contentId !== '') {
+          $tabQuery['content_id'] = $contentId;
+      }
+      if ($cid !== '') {
+          $tabQuery['cid'] = $cid;
+      }
+      $tabUrl = public_url(basename(__FILE__)) . '?' . http_build_query($tabQuery) . '#access-ranking';
+      ?>
+      <a href="<?= e($tabUrl) ?>" rel="nofollow" class="pcf-item-ranking__tab<?= $accessRankingPeriod === $tabKey ? ' is-active' : '' ?>"<?= $accessRankingPeriod === $tabKey ? ' aria-current="page"' : '' ?>><?= e((string)$tabConfig['label']) ?></a>
+    <?php endforeach; ?>
+  </nav>
+    <?php if ($accessRankingRows !== []): ?>
+      <ol class="pcf-item-ranking__list">
+        <?php foreach ($accessRankingRows as $index => $rankingRow): ?>
+          <?php $rankingItemUrl = public_url('item.php') . '?id=' . rawurlencode((string)($rankingRow['id'] ?? '')); ?>
+          <li class="pcf-item-ranking__row<?= $index < 3 ? ' is-top' : '' ?>">
+            <span class="pcf-item-ranking__position"><?= e((string)($index + 1)) ?></span>
+            <a class="pcf-item-ranking__title" href="<?= e($rankingItemUrl) ?>"><?= e((string)($rankingRow['title'] ?? '')) ?></a>
+            <span class="pcf-item-ranking__metrics">
+              <span>閲覧 <?= e((string)((int)($rankingRow['page_view_count'] ?? 0))) ?></span>
+              <span>移動 <?= e((string)((int)($rankingRow['out_click_count'] ?? 0))) ?></span>
+              <strong><?= e((string)((int)($rankingRow['access_count'] ?? 0))) ?> pt</strong>
+            </span>
+          </li>
+        <?php endforeach; ?>
+      </ol>
+    <?php else: ?>
+      <?php pcf_render_empty('人気の作品ランキング！のデータがありません。'); ?>
+    <?php endif; ?>
+  </section>
 </article>
 
 <div id="pcf-image-viewer-modal" style="display:none; position:fixed; inset:0; background:rgba(0,0,0,0.92); z-index:1200;">

@@ -14,10 +14,12 @@ $limit = 20;
 $offset = ($labelPage - 1) * $limit;
 $list = [];
 $hasNext = false;
+
 $label = fetch_label($id, $name);
 
-// item_labels は dmm_id / label_name を保持する。マスターに未登録でも、
-// 関連テーブルからIDまたは名称を一意なプレースホルダーで解決する。
+// 現行item_labelsは dmm_id / label_name を保持している。
+// PDOのネイティブprepareでは同じ名前付きプレースホルダーを複数回使えないため、
+// 既存のマスター取得で見つからない場合は関連テーブルから一意なプレースホルダーで解決する。
 if ($label === null && db_column_exists('item_labels', 'item_id')) {
     try {
         $stmt = db()->prepare(
@@ -28,7 +30,8 @@ if ($label === null && db_column_exists('item_labels', 'item_id')) {
             . 'AND ('
             . '(:id_present <> "" AND (TRIM(dmm_id) = :id_dmm OR TRIM(label_name) = :id_name)) '
             . 'OR (:name_present <> "" AND TRIM(label_name) = :name_exact)'
-            . ') LIMIT 1'
+            . ') '
+            . 'LIMIT 1'
         );
         $stmt->execute([
             ':id_present' => $id,
@@ -45,6 +48,7 @@ if ($label === null && db_column_exists('item_labels', 'item_id')) {
         error_log('[label] relation resolution failed: ' . $e->getMessage());
     }
 }
+
 if ($label === null) {
     require __DIR__ . '/404.php';
 }
@@ -56,13 +60,18 @@ if ($labelName === '' || $canonicalLabelId === '') {
 }
 
 $rows = [];
+
+// 名前だけで結ぶと表記揺れで0件になるため、現行DBではレーベルIDを最優先して取得する。
 if (db_column_exists('item_labels', 'item_id')) {
     try {
         $stmt = db()->prepare(
-            'SELECT DISTINCT items.* FROM items '
+            'SELECT DISTINCT items.* '
+            . 'FROM items '
             . 'INNER JOIN item_labels ON item_labels.item_id = items.id '
-            . 'WHERE (TRIM(COALESCE(item_labels.dmm_id, "")) = :label_id '
-            . 'OR TRIM(item_labels.label_name) = :label_name) '
+            . 'WHERE ('
+            . 'TRIM(COALESCE(item_labels.dmm_id, "")) = :label_id '
+            . 'OR TRIM(item_labels.label_name) = :label_name'
+            . ') '
             . 'AND ' . items_product_source_where('items') . ' '
             . 'ORDER BY items.release_date DESC, items.id DESC '
             . 'LIMIT :limit OFFSET :offset'
@@ -78,9 +87,12 @@ if (db_column_exists('item_labels', 'item_id')) {
         $rows = [];
     }
 }
+
+// 旧DB構造やID未登録データは従来の名前検索へフォールバックする。
 if ($rows === []) {
     $rows = fetch_items_by_label_name($labelName, $limit + 1, $offset);
 }
+
 $rows = dedupe_items_by_key($rows);
 [$list, $hasNext] = paginate_items($rows, $limit);
 if ($labelPage === 1 && $list === []) {
@@ -103,6 +115,7 @@ $accessRankingRows = array_values(array_filter($accessRankingRows, static functi
     if ($name === '' || pcf_is_noise_name($name)) {
         return false;
     }
+
     return preg_match('/[^\s\-_ー－―—–]+/u', $name) === 1;
 }));
 
@@ -121,10 +134,20 @@ if ($hasNext) {
 require __DIR__ . '/partials/header.php';
 ?>
 <style>
-.pcf-label-related-grid { grid-template-columns:repeat(4,minmax(0,1fr)); }
-@media (max-width:1100px){.pcf-label-related-grid{grid-template-columns:repeat(3,minmax(0,1fr));}}
-@media (max-width:900px){.pcf-label-related-grid{grid-template-columns:repeat(2,minmax(0,1fr));}}
-@media (max-width:768px){.pcf-label-related-grid{grid-template-columns:1fr}.pcf-label-related-grid .pcf-dm-card__image-link,.pcf-label-related-grid .pcf-dm-card__image{height:auto}}
+.pcf-label-related-grid {
+  grid-template-columns: repeat(4, minmax(0, 1fr));
+}
+@media (max-width: 1100px) {
+  .pcf-label-related-grid { grid-template-columns: repeat(3, minmax(0, 1fr)); }
+}
+@media (max-width: 900px) {
+  .pcf-label-related-grid { grid-template-columns: repeat(2, minmax(0, 1fr)); }
+}
+@media (max-width: 768px) {
+  .pcf-label-related-grid { grid-template-columns: 1fr; }
+  .pcf-label-related-grid .pcf-dm-card__image-link,
+  .pcf-label-related-grid .pcf-dm-card__image { height: auto; }
+}
 </style>
 <?php pcf_render_breadcrumbs([
     ['label' => 'トップ', 'url' => public_url('index.php')],

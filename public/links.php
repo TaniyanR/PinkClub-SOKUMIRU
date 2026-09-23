@@ -37,7 +37,7 @@ $orderBy = $hasDisplayOrder ? 'display_order ASC, id ASC' : 'id ASC';
 $sql = 'SELECT * FROM mutual_links WHERE ' . implode(' AND ', $where) . ' ORDER BY ' . $orderBy;
 $rows = db()->query($sql)->fetchAll(PDO::FETCH_ASSOC);
 
-// 旧リンク集でも、同じURLの相互リンク設定を利用する。
+// Reuse the existing partner setting for matching legacy link-list entries.
 $partnerNofollowByUrl = [];
 try {
     if (db_column_exists('partner_sites', 'rel_nofollow')) {
@@ -45,8 +45,7 @@ try {
         foreach ($partners as $partner) {
             $key = rtrim(trim((string)($partner['url'] ?? '')), '/');
             if ($key !== '') {
-                $partnerNofollowByUrl[$key] = !empty($partnerNofollowByUrl[$key])
-                    || (int)($partner['rel_nofollow'] ?? 0) === 1;
+                $partnerNofollowByUrl[$key] = !empty($partnerNofollowByUrl[$key]) || (int)($partner['rel_nofollow'] ?? 0) === 1;
             }
         }
     }
@@ -55,8 +54,6 @@ try {
 }
 
 $pageTitle = 'リンク集';
-$pageDescription = '当サイトの相互リンク一覧です。';
-$canonicalUrl = public_url('links.php');
 include __DIR__ . '/partials/header.php';
 ?>
 <section class="block"><h1 class="section-title">リンク集</h1>
