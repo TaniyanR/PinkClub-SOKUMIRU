@@ -7,7 +7,6 @@ require_once __DIR__ . '/../lib/local_config_writer.php';
 
 $dbConfigError = null;
 $dbConfigNotice = null;
-$initialPassword = null;
 
 function setup_normalize_local_db(array $db): array
 {
@@ -80,6 +79,23 @@ function setup_test_db_config(array $db): void
 }
 
 $localConfigStatus = setup_local_config_status();
+
+// The setup endpoint must stop accepting configuration changes as soon as a
+// working installation exists.  This check intentionally runs before any POST
+// action; the later redirect was too late and allowed an unauthenticated
+// request with its own CSRF token to replace config.local.php.
+$configuredDb = app_config()['db'] ?? [];
+if (is_array($configuredDb) && db_validate_config($configuredDb, true) === []) {
+    try {
+        if ((installer_status()['completed'] ?? false) === true) {
+            app_redirect(LOGIN_PATH);
+        }
+    } catch (Throwable) {
+        // An incomplete or unavailable database still needs the diagnostics
+        // and recovery form below.
+    }
+}
+
 $csrfFailed = false;
 if ($_SERVER['REQUEST_METHOD'] === 'POST' && !csrf_verify(post('_csrf'))) {
     unset($_SESSION['_csrf']);
@@ -91,11 +107,7 @@ if (!$csrfFailed && $_SERVER['REQUEST_METHOD'] === 'POST' && (string)post('actio
     try {
         $setupResult = installer_run();
         if (($setupResult['success'] ?? false) === true) {
-            $initialPassword = is_string($setupResult['initial_password'] ?? null)
-                ? $setupResult['initial_password'] : null;
-            if ($initialPassword === null) {
-                app_redirect(LOGIN_PATH);
-            }
+            app_redirect(LOGIN_PATH);
         }
         $dbConfigError = (string)($setupResult['error'] ?? 'セットアップに失敗しました。install.log を確認してください。');
     } catch (Throwable $exception) {
@@ -174,11 +186,11 @@ if (!$csrfFailed && $dbConfigError !== null && $_SERVER['REQUEST_METHOD'] === 'P
 $configErrors = db_validate_config($currentDbConfig, true);
 if ($configErrors === []) {
     $status = installer_status();
-    if (($status['completed'] ?? false) === true && $initialPassword === null) {
+    if (($status['completed'] ?? false) === true) {
         app_redirect(LOGIN_PATH);
     }
 } else {
-    $status = ['server_connection'=>false,'db_connection'=>false,'admins_table'=>false,'settings_table'=>false,'auth_schema'=>false,'admin_user'=>false,'settings_row'=>false,'completed'=>false];
+    $status = ['server_connection'=>false,'db_connection'=>false,'admins_table'=>false,'settings_table'=>false,'admin_user'=>false,'settings_row'=>false,'completed'=>false];
     $dbConfigNotice = 'DB設定が未入力です。MySQL情報を入力して保存してください。';
 }
 
@@ -187,8 +199,7 @@ $checks = [
     '対象DB接続' => $status['db_connection'] ?? false,
     'admins テーブル' => $status['admins_table'] ?? false,
     'settings テーブル' => $status['settings_table'] ?? false,
-    '管理者認証カラム' => $status['auth_schema'] ?? false,
-    '初期管理者 admin' => $status['admin_user'] ?? false,
+    '管理者アカウント' => $status['admin_user'] ?? false,
     'settings(installer.ready=1)' => $status['settings_row'] ?? false,
 ];
 
@@ -217,15 +228,6 @@ $faviconType = strtolower((string)pathinfo($faviconPath, PATHINFO_EXTENSION)) ==
     <section class="setup-card">
       <h1><?= e(APP_NAME) ?> セットアップ確認</h1>
       <div class="alert alert-warning">セットアップ失敗時の診断ページです。DB設定保存後は、この画面の「セットアップを実行する」から再実行できます。既存DBやテーブルを削除する必要はありません。</div>
-
-      <?php if ($initialPassword !== null): ?>
-        <section class="alert alert-warning" aria-labelledby="initial-password-title">
-          <h2 id="initial-password-title">セットアップが完了しました</h2>
-          <p>初期ログインIDは <strong>admin</strong>、初期パスワードは <code><?= e($initialPassword) ?></code> です。この画面で一度だけ表示されます。</p>
-          <p>ログイン後、個人設定でログインID、再設定用メールアドレス、12文字以上の新しいパスワードを登録してください。</p>
-          <p><a href="<?= e(LOGIN_PATH) ?>">管理画面へログインする</a></p>
-        </section>
-      <?php endif; ?>
 
 
       <h2>DB接続設定</h2>

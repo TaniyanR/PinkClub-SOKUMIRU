@@ -36,6 +36,7 @@ $conformEmbeddedHtml = static function (string $html): string {
         if ($tag === '' || preg_match('/\balt\s*=/i', $tag) === 1) {
             return $tag;
         }
+
         return preg_replace('/\s*\/?>$/', ' alt="">', $tag) ?? $tag;
     }, $html) ?? $html;
 };
@@ -60,12 +61,10 @@ $titleText = (string)($title ?? $pageTitle ?? $siteName);
 $titleBaseText = trim($titleText);
 $isHomeTitle = $titleBaseText === '' || $titleBaseText === 'トップ' || $titleBaseText === $siteName;
 $titleText = $isHomeTitle ? ($tagline !== '' ? $siteName . ' - ' . $tagline : $siteName) : $titleBaseText . ' | ' . $siteName;
-$logoUrl = site_media_public_url('logo') ?: ($logoPath !== '' ? public_url($logoPath) : '');
-$faviconUrl = site_media_public_url('favicon') ?: ($faviconPath !== '' ? public_versioned_url($faviconPath) : '');
+$logoUrl = $logoPath !== '' ? public_url($logoPath) : '';
+$faviconUrl = $faviconPath !== '' ? public_versioned_url($faviconPath) : '';
 $faviconExt = strtolower((string)pathinfo($faviconPath, PATHINFO_EXTENSION));
 $faviconType = $faviconExt === 'png' ? 'image/png' : 'image/x-icon';
-$faviconMeta = site_media_meta_get('favicon');
-if (is_array($faviconMeta)) $faviconType = (string)$faviconMeta['mime_type'];
 $canRenderAd = function_exists('render_ad');
 $descriptionText = (string)($pageDescription ?? '');
 if ($descriptionText === '') {
@@ -76,9 +75,8 @@ $canonicalHref = isset($canonicalUrl) && is_string($canonicalUrl) && $canonicalU
 $ogUrl = isset($ogUrl) && is_string($ogUrl) && $ogUrl !== '' ? $ogUrl : ($canonicalHref !== '' ? $canonicalHref : public_url(basename((string)($_SERVER['SCRIPT_NAME'] ?? 'index.php'))));
 $ogType = isset($ogType) && is_string($ogType) && $ogType !== '' ? $ogType : 'website';
 $ogImage = isset($ogImage) && is_string($ogImage) ? trim($ogImage) : '';
-if ($ogImage === '') {
-    $ogpPath = trim($safeTextSetting('site.ogp_path', ''));
-    $ogImage = site_media_public_url('ogp') ?: ($ogpPath !== '' ? public_versioned_url($ogpPath) : $logoUrl);
+if ($ogImage === '' && $logoPath !== '') {
+    $ogImage = $logoUrl;
 }
 if ($ogImage !== '' && !str_starts_with($ogImage, 'http://') && !str_starts_with($ogImage, 'https://') && !str_starts_with($ogImage, '/')) {
     $ogImage = asset_url($ogImage);
@@ -88,7 +86,6 @@ $itemIdForSocial = filter_input(INPUT_GET, 'id', FILTER_VALIDATE_INT, ['options'
 if ($headerScriptName === 'item.php' && is_int($itemIdForSocial) && $itemIdForSocial > 0) {
     $ogImage = public_url('social-image.php?id=' . $itemIdForSocial . '&v=3');
 }
-$ogImageAlt = $titleBaseText !== '' ? $titleBaseText : $siteName;
 $jsonLdText = isset($jsonLd) && is_string($jsonLd) && $jsonLd !== '' ? $jsonLd : '';
 if ($jsonLdText !== '') {
     $jsonLdData = json_decode($jsonLdText, true);
@@ -96,6 +93,7 @@ if ($jsonLdText !== '') {
         if ($ogImage !== '') {
             $jsonLdData['image'] = $ogImage;
         }
+
         $offers = $jsonLdData['offers'] ?? null;
         if (is_array($offers)) {
             $hasOfferPrice = isset($offers['price']) && is_numeric($offers['price']);
@@ -109,12 +107,14 @@ if ($jsonLdText !== '') {
                 }
             }
         }
+
         if (isset($item) && is_array($item)) {
             $sku = trim((string)($item['content_id'] ?? $item['product_id'] ?? ''));
             if ($sku !== '') {
                 $jsonLdData['sku'] = $sku;
             }
         }
+
         $encodedJsonLd = json_encode($jsonLdData, JSON_UNESCAPED_UNICODE | JSON_UNESCAPED_SLASHES | JSON_HEX_TAG | JSON_HEX_AMP);
         if (is_string($encodedJsonLd)) {
             $jsonLdText = $encodedJsonLd;
@@ -148,7 +148,7 @@ if (!headers_sent()) {
   <?php if ($ogImage !== ''): ?>
   <meta property="og:image" content="<?= e($ogImage) ?>">
   <?php if (str_starts_with($ogImage, 'https://')): ?><meta property="og:image:secure_url" content="<?= e($ogImage) ?>"><?php endif; ?>
-  <meta property="og:image:alt" content="<?= e($ogImageAlt) ?>">
+  <meta property="og:image:alt" content="<?= e($titleText) ?>">
   <?php endif; ?>
   <meta property="og:site_name" content="<?= e($siteName) ?>">
   <meta property="og:locale" content="ja_JP">
@@ -157,7 +157,7 @@ if (!headers_sent()) {
   <?php if ($descriptionText !== ''): ?><meta name="twitter:description" content="<?= e($descriptionText) ?>"><?php endif; ?>
   <?php if ($ogImage !== ''): ?>
   <meta name="twitter:image" content="<?= e($ogImage) ?>">
-  <meta name="twitter:image:alt" content="<?= e($ogImageAlt) ?>">
+  <meta name="twitter:image:alt" content="<?= e($titleText) ?>">
   <?php endif; ?>
   <?php if ($jsonLdText !== ''): ?><script type="application/ld+json"><?= $jsonLdText ?></script><?php endif; ?>
   <?php if ($customHeadCode !== ''): ?>
@@ -173,6 +173,7 @@ if (!headers_sent()) {
   <script src="<?= e(asset_url('js/recently-viewed.js')) ?>" defer></script>
   <script src="<?= e(asset_url('js/recommendations.js')) ?>" defer></script>
   <script src="<?= e(asset_url('js/item-detail-fixes.js')) ?>" defer></script>
+  <script src="<?= e(asset_url('js/sample-image-modal.js')) ?>" defer></script>
   <script>
   document.addEventListener('DOMContentLoaded', () => {
     const vrPattern = /(?:【|\[|［)?\s*VR\s*(?:】|\]|］)?/i;
@@ -271,7 +272,7 @@ if (!headers_sent()) {
 <header class="site-header">
   <div class="site-header__top">
     <div class="header-left site-header__left">
-      <?php if ($logoUrl !== ''): ?>
+      <?php if ($logoPath !== ''): ?>
         <div class="site-logo-wrap">
           <a href="<?= e(public_url('')) ?>" class="site-title-link"><img src="<?= e($logoUrl) ?>" alt="<?= e($siteName) ?>" class="site-logo"></a>
         </div>
@@ -283,7 +284,7 @@ if (!headers_sent()) {
     </div>
     <div class="header-right site-header__right">
       <?php if (!$isMobileRequest && $headerAdHtml !== '') : ?>
-        <div class="site-ad"><?php render_deferred_ad_html($headerAdHtml, 'header_custom'); ?></div>
+        <div class="site-ad"><?= $headerAdHtml ?></div>
       <?php elseif (!$isMobileRequest && $canRenderAd && (!function_exists('should_show_ad') || should_show_ad('header_left_728x90', $pageType, 'pc'))) : ?>
         <div class="site-ad"><?php render_ad('header_left_728x90', $pageType, 'pc'); ?></div>
       <?php endif; ?>

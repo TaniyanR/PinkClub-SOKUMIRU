@@ -88,12 +88,12 @@ foreach ($kanaGroups as &$groupRows) {
     $sortByName($groupRows);
 }
 unset($groupRows);
-$sortByName($otherRows);
 ksort($alphaGroups);
 foreach ($alphaGroups as &$groupRows) {
     $sortByName($groupRows);
 }
 unset($groupRows);
+$sortByName($otherRows);
 
 $pageTitle = 'レーベル一覧';
 $pageDescription = 'SOKUMIRUのレーベル一覧。レーベル名から関連作品を探せます。';

@@ -27,7 +27,7 @@ $item = null;
 
 try {
     if ($id > 0) {
-        $stmt = db()->prepare('SELECT id FROM items WHERE id = :id AND ' . items_product_source_where() . ' LIMIT 1');
+        $stmt = db()->prepare('SELECT id FROM items WHERE id = :id AND ' . items_front_release_where() . ' LIMIT 1');
         $stmt->execute([':id' => $id]);
         $row = $stmt->fetch(PDO::FETCH_ASSOC);
         if (is_array($row)) {
@@ -45,8 +45,7 @@ try {
         exit;
     }
 
-    $ip = (string)($_SERVER['REMOTE_ADDR'] ?? '');
-    $ipHash = $ip !== '' ? hash('sha256', $ip . date('Y-m-d')) : null;
+    $ipHash = analytics_visitor_hash($userAgent);
     $ua = mb_substr($userAgent, 0, 255);
 
     $viewStmt = db()->prepare(

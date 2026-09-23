@@ -49,10 +49,12 @@ $adminMenuItemIsActive = static function (string $target) use ($currentScript): 
     if ($currentScript !== basename($path)) {
         return false;
     }
+
     $query = (string)(parse_url($target, PHP_URL_QUERY) ?: '');
     if ($query === '') {
         return true;
     }
+
     $expected = [];
     parse_str($query, $expected);
     foreach ($expected as $key => $value) {
@@ -67,10 +69,20 @@ $adminMenuItemIsActive = static function (string $target) use ($currentScript): 
 $flash = function_exists('flash_get') ? flash_get() : null;
 $titleText = (string)($title ?? APP_NAME);
 $faviconPath = trim(site_setting_get('site.favicon_path', ''));
-$faviconUrl = site_media_public_url('favicon') ?: ($faviconPath !== '' ? public_versioned_url($faviconPath) : '');
-$faviconType = strtolower((string)pathinfo($faviconPath, PATHINFO_EXTENSION)) === 'png' ? 'image/png' : 'image/x-icon';
-$faviconMeta = site_media_meta_get('favicon');
-if (is_array($faviconMeta)) $faviconType = (string)$faviconMeta['mime_type'];
+$faviconUrl = $faviconPath !== '' ? public_versioned_url($faviconPath) : '';
+$faviconType = 'image/x-icon';
+if (function_exists('site_media_meta_get')) {
+    $faviconMedia = site_media_meta_get('favicon');
+    if (is_array($faviconMedia) && trim((string)($faviconMedia['mime_type'] ?? '')) !== '') {
+        $faviconType = trim((string)$faviconMedia['mime_type']);
+    } else {
+        $faviconExt = strtolower((string)pathinfo($faviconPath, PATHINFO_EXTENSION));
+        $faviconType = $faviconExt === 'png' ? 'image/png' : 'image/x-icon';
+    }
+} else {
+    $faviconExt = strtolower((string)pathinfo($faviconPath, PATHINFO_EXTENSION));
+    $faviconType = $faviconExt === 'png' ? 'image/png' : 'image/x-icon';
+}
 ?>
 <!doctype html>
 <html lang="ja">
@@ -134,11 +146,6 @@ if (is_array($faviconMeta)) $faviconType = (string)$faviconMeta['mime_type'];
     </nav>
   </aside>
   <main class="admin-main">
-    <?php if (empty(auth_user()['initial_setup_completed'])): ?>
-      <div class="admin-notice admin-notice--error" role="alert">
-        <p>初期管理者の認証情報が未設定です。<a href="<?= e(admin_url('personal_settings.php')) ?>">個人設定</a>でログインID、再設定用メールアドレス、パスワードを設定してください。</p>
-      </div>
-    <?php endif; ?>
     <?php if (is_array($flash) && isset($flash['message'])): ?>
       <div class="admin-notice <?= ($flash['type'] ?? '') === 'success' ? 'admin-notice--success' : 'admin-notice--error' ?>"><p><?= e((string)$flash['message']) ?></p></div>
     <?php endif; ?>

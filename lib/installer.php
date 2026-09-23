@@ -94,6 +94,16 @@ function installer_ensure_database_exists(): void
     db_reset_connections();
 }
 
+function installer_prepare_legacy_settings_table(PDO $pdo, string $stepLabel): void
+{
+    // Older installations used site_settings. Rename it before schema.sql can
+    // create an empty settings table and leave the existing values stranded.
+    if (!db_table_exists('settings') && db_table_exists('site_settings')) {
+        $pdo->exec('RENAME TABLE site_settings TO settings');
+        installer_log('step=' . $stepLabel . ' site_settings_renamed=true');
+    }
+}
+
 function installer_read_sql_file(string $path): string
 {
     if (!is_file($path)) throw new RuntimeException('SQLファイルが見つかりません: ' . $path);
@@ -190,15 +200,6 @@ function installer_apply_migrations(string $dir, string $step): int
     return $count;
 }
 
-function installer_prepare_legacy_settings_table(PDO $pdo, string $stepLabel): void
-{
-    if (!db_table_exists('settings') && db_table_exists('site_settings')) {
-        $pdo->exec('RENAME TABLE site_settings TO settings');
-        db_clear_metadata_cache();
-        installer_log('step=' . $stepLabel . ' site_settings_renamed=true');
-    }
-}
-
 function installer_normalize_settings_table(PDO $pdo, string $stepLabel): void
 {
     if (!db_table_exists('settings')) {
@@ -212,6 +213,7 @@ function installer_normalize_settings_table(PDO $pdo, string $stepLabel): void
         return;
     }
 
+    // Keep previous migration attempts and backups intact.
     $suffix = bin2hex(random_bytes(8));
     $tmpTable = 'settings_kv_tmp_' . $suffix;
     $pdo->exec('CREATE TABLE `' . $tmpTable . '` (setting_key VARCHAR(191) PRIMARY KEY, setting_value LONGTEXT NULL, created_at DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP, updated_at DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4');
@@ -247,11 +249,13 @@ function installer_normalize_settings_table(PDO $pdo, string $stepLabel): void
 
     if (in_array('affiliate_id', $columns, true)) {
         $orderBy = in_array('id', $columns, true) ? ' ORDER BY id ASC ' : '';
-        $pdo->exec('INSERT INTO `' . $tmpTable . '`(setting_key, setting_value) SELECT "sokumiru_affiliate_id", COALESCE(CAST(affiliate_id AS CHAR), "") FROM settings' . $orderBy . 'LIMIT 1 ON DUPLICATE KEY UPDATE setting_value=VALUES(setting_value)');
+        $sql = 'INSERT INTO `' . $tmpTable . '`(setting_key, setting_value, created_at, updated_at) SELECT "sokumiru_affiliate_id", COALESCE(CAST(affiliate_id AS CHAR), ""), NOW(), NOW() FROM settings' . $orderBy . 'LIMIT 1 ON DUPLICATE KEY UPDATE setting_value=VALUES(setting_value), updated_at=NOW()';
+        $pdo->exec($sql);
     }
+
     $backup = 'settings_legacy_backup_' . $suffix;
     $pdo->exec('RENAME TABLE settings TO `' . $backup . '`, `' . $tmpTable . '` TO settings');
-    db_clear_metadata_cache();
+    unset($GLOBALS['__site_settings_columns']);
     installer_log('step=' . $stepLabel . ' settings_table_normalized=true backup=' . $backup);
 }
 
@@ -259,28 +263,12 @@ function installer_ensure_admin_user(PDO $pdo, string $stepLabel): bool
 {
     $stmt = $pdo->query('SELECT 1 FROM admins ORDER BY id ASC LIMIT 1');
     if ($stmt->fetchColumn() !== false) { installer_log('step=' . $stepLabel . ' admin_exists=true'); return false; }
+    $initialPassword = substr(str_replace(['+', '/', '='], '', base64_encode(random_bytes(18))), 0, 18);
     $insert = $pdo->prepare('INSERT INTO admins (username, password_hash) VALUES (:username, :password_hash)');
-    $insert->execute(['username' => 'admin', 'password_hash' => password_hash('password', PASSWORD_DEFAULT)]);
-    $GLOBALS['installer_initial_password'] = 'password';
-    installer_log('step=' . $stepLabel . ' admin_created=true');
+    $insert->execute(['username' => 'admin', 'password_hash' => password_hash($initialPassword, PASSWORD_DEFAULT)]);
+    $GLOBALS['installer_initial_credentials'] = ['username' => 'admin', 'password' => $initialPassword];
+    installer_log('step=' . $stepLabel . ' admin_created=true initial_password=[REDACTED]');
     return true;
-}
-
-function installer_reconcile_existing_admin(PDO $pdo, string $stepLabel): void
-{
-    $row = $pdo->query('SELECT id,username,email,password_hash,initial_setup_completed FROM admins ORDER BY id ASC LIMIT 1')->fetch(PDO::FETCH_ASSOC);
-    if (!is_array($row) || (bool)$row['initial_setup_completed']) { return; }
-    require_once __DIR__ . '/site_settings.php';
-    $email = strtolower(trim((string)($row['email'] ?? '')));
-    if ($email === '') { $email = strtolower(trim(site_setting_get('site.admin_email', ''))); }
-    $isConfigured = strcasecmp((string)$row['username'], 'admin') !== 0
-        && filter_var($email, FILTER_VALIDATE_EMAIL)
-        && !password_verify('password', (string)$row['password_hash']);
-    if ($isConfigured) {
-        $pdo->prepare('UPDATE admins SET email=:email,initial_setup_completed=1 WHERE id=:id')
-            ->execute([':email' => $email, ':id' => (int)$row['id']]);
-        installer_log('step=' . $stepLabel . ' existing_admin_completed=true');
-    }
 }
 
 function installer_ensure_settings_row(PDO $pdo, string $stepLabel): bool
@@ -308,10 +296,8 @@ function installer_status(): array
     $status['admins_table'] = db_table_exists('admins');
     $status['settings_table'] = db_table_exists('settings');
     if ($status['admins_table']) {
-        $status['auth_schema'] = db_column_exists('admins', 'email')
-            && db_column_exists('admins', 'initial_setup_completed')
-            && db_column_exists('admins', 'session_version');
-        $status['admin_user'] = db()->query('SELECT 1 FROM admins ORDER BY id ASC LIMIT 1')->fetchColumn() !== false;
+        $stmt = db()->query('SELECT 1 FROM admins ORDER BY id ASC LIMIT 1');
+        $status['admin_user'] = $stmt->fetchColumn() !== false;
     }
     if ($status['settings_table']) {
         require_once __DIR__ . '/site_settings.php';
@@ -340,7 +326,6 @@ function installer_status(): array
         && $status['db_connection']
         && $status['admins_table']
         && $status['settings_table']
-        && $status['auth_schema']
         && $status['admin_user']
         && $status['settings_row']
     );
@@ -350,9 +335,11 @@ function installer_status(): array
 function installer_run(): array
 {
     installer_log('step=start db=' . (app_config()['db']['dbname'] ?? ''));
-    $result = ['success'=>false,'steps'=>[],'error'=>null,'error_detail'=>null,'failed_sql'=>null,'error_summary'=>null,'log_tail'=>null];
+    $result = ['success'=>false,'steps'=>[],'error'=>null,'error_detail'=>null,'failed_sql'=>null,'error_summary'=>null,'log_tail'=>null,'initial_credentials_created'=>false];
     $currentStep = 'server_connection';
     $step = static function (string $id, bool $ok, string $message = '') use (&$result): void { $result['steps'][]=['id'=>$id,'status'=>$ok?'ok':'ng','message'=>$message]; };
+
+    unset($GLOBALS['installer_initial_credentials']);
 
     try {
         installer_clear_last_error();
@@ -363,18 +350,15 @@ function installer_run(): array
         $step('server_connection', true);
 
         $currentStep='create_database'; installer_ensure_database_exists(); $step('create_database', true);
-        db_clear_metadata_cache();
 
         $currentStep='prepare_legacy_settings'; installer_prepare_legacy_settings_table(db(), 'prepare_legacy_settings'); $step('prepare_legacy_settings', true);
 
         $currentStep='create_tables'; $tableCount = installer_execute_sql_file(__DIR__ . '/../sql/schema.sql', 'create_tables'); $step('create_tables', true, 'results=' . $tableCount);
-        db_clear_metadata_cache();
 
+        // Credential migrations read setting_key / setting_value.
         $currentStep='normalize_settings'; installer_normalize_settings_table(db(), 'normalize_settings'); $step('normalize_settings', true);
 
         $currentStep='apply_migrations'; $migrationCount = installer_apply_migrations(__DIR__ . '/../sql/migrations', 'apply_migrations'); $step('apply_migrations', true, 'count=' . $migrationCount);
-        db_clear_metadata_cache();
-        installer_reconcile_existing_admin(db(), 'normalize_settings');
 
         $currentStep='seed_data';
         $seedPath = __DIR__ . '/../sql/seed.sql';
@@ -390,15 +374,13 @@ function installer_run(): array
         installer_ensure_settings_row(db(), 'completion_check_retry');
         $status = installer_status();
         if (($status['completed'] ?? false) !== true) {
-            $requiredKeys = ['server_connection', 'db_connection', 'admins_table', 'settings_table', 'auth_schema', 'admin_user', 'settings_row'];
+            $requiredKeys = ['server_connection', 'db_connection', 'admins_table', 'settings_table', 'admin_user', 'settings_row'];
             $failedKeys = array_values(array_filter($requiredKeys, static fn(string $key): bool => ($status[$key] ?? false) !== true));
             installer_log('step=completion_check status=' . json_encode($status, JSON_UNESCAPED_UNICODE | JSON_UNESCAPED_SLASHES) . ' failed_keys=' . json_encode($failedKeys, JSON_UNESCAPED_UNICODE | JSON_UNESCAPED_SLASHES));
             throw new RuntimeException('セットアップ完了条件を満たせませんでした。 status=' . json_encode($status, JSON_UNESCAPED_UNICODE));
         }
 
         $step('completion_check', true); installer_log('step=completed status=ok'); $result['success']=true;
-        $result['initial_password'] = is_string($GLOBALS['installer_initial_password'] ?? null)
-            ? $GLOBALS['installer_initial_password'] : null;
     } catch (Throwable $e) {
         $failedSql = is_string($GLOBALS['installer_last_failed_sql'] ?? null) ? $GLOBALS['installer_last_failed_sql'] : null;
         installer_log_exception($currentStep, $e, $failedSql);
@@ -408,6 +390,21 @@ function installer_run(): array
         $result['failed_sql'] = $failedSql;
         $step($currentStep, false, $result['error']);
     }
+
+    $initialCredentials = $GLOBALS['installer_initial_credentials'] ?? null;
+    if (is_array($initialCredentials)
+        && isset($initialCredentials['username'], $initialCredentials['password'])
+        && is_string($initialCredentials['username'])
+        && is_string($initialCredentials['password'])
+    ) {
+        $result['initial_credentials_created'] = true;
+        if (PHP_SAPI === 'cli') {
+            $result['initial_credentials'] = $initialCredentials;
+        } elseif (session_status() === PHP_SESSION_ACTIVE) {
+            $_SESSION['installer_initial_credentials'] = $initialCredentials;
+        }
+    }
+    unset($GLOBALS['installer_initial_credentials']);
 
     $result['error_summary'] = installer_last_error_summary();
     $result['log_tail'] = installer_log_tail(30);

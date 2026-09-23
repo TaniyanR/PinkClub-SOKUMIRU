@@ -54,9 +54,9 @@ function config(): array
     // timezone（一度だけ）
     date_default_timezone_set('Asia/Tokyo');
 
-    // 互換吸収：古い `api` が残っていたら `dmm_api` に寄せる
-    if (isset($config['api']) && !isset($config['dmm_api']) && is_array($config['api'])) {
-        $config['dmm_api'] = $config['api'];
+    // 互換吸収：古い `api` が残っていたら `sokumiru_api` に寄せる
+    if (isset($config['api']) && !isset($config['sokumiru_api']) && is_array($config['api'])) {
+        $config['sokumiru_api'] = $config['api'];
     }
     unset($config['api']);
 

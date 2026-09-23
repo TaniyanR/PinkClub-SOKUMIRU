@@ -16,6 +16,7 @@
       return false;
     }
   };
+
   if (!storageAvailable()) return;
 
   const safeImageUrl = (value) => {
@@ -26,25 +27,6 @@
     } catch (_) {
       return '';
     }
-  };
-
-  const safeSameOriginUrl = (value) => {
-    try {
-      const url = new URL(String(value || ''), window.location.origin);
-      return url.origin === window.location.origin ? url.href : '';
-    } catch (_) {
-      return '';
-    }
-  };
-
-  const normalizeImageFallbacks = (value, primary = '') => {
-    if (!Array.isArray(value)) return [];
-    const fallbacks = [];
-    value.forEach((candidate) => {
-      const url = safeImageUrl(candidate);
-      if (url && url !== primary && !fallbacks.includes(url)) fallbacks.push(url);
-    });
-    return fallbacks.slice(0, 10);
   };
 
   const itemUrlForId = (id, storedUrl = '') => {
@@ -102,7 +84,6 @@
     const url = itemUrlForId(id, entry.url);
     if (!Number.isInteger(id) || id <= 0 || title === '' || url === '') return null;
 
-    const image = safeImageUrl(entry.image);
     return {
       version: 1,
       id,
@@ -178,12 +159,6 @@
     const id = Number.parseInt(new URLSearchParams(window.location.search).get('id') || '', 10);
     if (!Number.isInteger(id) || id <= 0) return;
 
-    const pageStatus = document.querySelector('.pcf-hero__eyebrow');
-    if (pageStatus && pageStatus.textContent.trim() === '404 Not Found') {
-      writeHistory(readHistory().filter((entry) => entry.id !== id));
-      return;
-    }
-
     const titleMeta = document.querySelector('meta[property="og:title"]');
     const heading = document.querySelector('h1');
     const rawTitle = (titleMeta && titleMeta.content) || (heading && heading.textContent) || document.title;
@@ -225,84 +200,7 @@
     return node;
   };
 
-  const appendImage = (imageLink, entry) => {
-    const candidates = [entry.image, ...(entry.image_fallbacks || [])]
-      .map(safeImageUrl)
-      .filter((url, index, values) => url && values.indexOf(url) === index);
-    if (candidates.length === 0) {
-      imageLink.appendChild(createNoImage());
-      return;
-    }
-
-    const image = createElement('img', 'pcf-recent__card-image');
-    image.alt = entry.title;
-    image.loading = 'lazy';
-    image.decoding = 'async';
-    let candidateIndex = 0;
-    image.addEventListener('error', () => {
-      candidateIndex += 1;
-      if (candidateIndex < candidates.length) {
-        image.src = candidates[candidateIndex];
-        return;
-      }
-      image.replaceWith(createNoImage());
-    });
-    image.src = candidates[0];
-    imageLink.appendChild(image);
-  };
-
-  const refreshHistory = async (history, section) => {
-    const endpoint = safeSameOriginUrl(section.dataset.endpoint);
-    if (!endpoint || history.length === 0) return history;
-
-    try {
-      const url = new URL(endpoint);
-      url.searchParams.set('ids', history.map((entry) => entry.id).join(','));
-      const response = await fetch(url.href, {
-        credentials: 'same-origin',
-        headers: { Accept: 'application/json' },
-        cache: 'no-store'
-      });
-      if (!response.ok) return history;
-      const payload = await response.json();
-      if (!payload || !Array.isArray(payload.items)) return history;
-
-      const currentById = new Map();
-      payload.items.forEach((item) => {
-        const old = history.find((entry) => entry.id === Number(item.id));
-        const normalized = normalizeEntry({
-          ...item,
-          viewedAt: old?.viewedAt || 0,
-          viewCount: old?.viewCount || 1,
-          actresses: old?.actresses || [],
-          genres: old?.genres || [],
-          makers: old?.makers || [],
-          series: old?.series || []
-        });
-        if (normalized) currentById.set(normalized.id, normalized);
-      });
-
-      // エンドポイントに存在しないIDは、非公開化・削除済みとして履歴から除外する。
-      return history
-        .filter((entry) => currentById.has(entry.id))
-        .map((entry) => {
-          const current = currentById.get(entry.id);
-          return {
-            ...entry,
-            title: current.title || entry.title,
-            image: current.image || entry.image,
-            image_fallbacks: current.image_fallbacks,
-            url: current.url || entry.url
-          };
-        });
-    } catch (_) {
-      return history;
-    }
-  };
-
-  let renderSequence = 0;
-  const renderHistory = async () => {
-    const sequence = ++renderSequence;
+  const renderHistory = () => {
     const section = document.getElementById('pcf-recently-viewed');
     const list = document.getElementById('pcf-recent-list');
     const clearButton = document.getElementById('pcf-recent-clear');
@@ -326,7 +224,7 @@
       renderHistory();
     };
 
-    let history = readHistory().slice(0, MAX_RENDERED);
+    const history = readHistory().slice(0, MAX_RENDERED);
     list.replaceChildren();
 
     if (history.length === 0) {
@@ -334,6 +232,7 @@
       restore.hidden = true;
       return;
     }
+
     if (historyIsHidden()) {
       section.hidden = true;
       restore.hidden = false;
@@ -341,25 +240,24 @@
     }
 
     restore.hidden = true;
-    history = await refreshHistory(history, section);
-    if (sequence !== renderSequence) return;
-    writeHistory([
-      ...history,
-      ...readHistory().filter((entry) => !history.some((current) => current.id === entry.id))
-    ]);
-
-    if (history.length === 0) {
-      section.hidden = true;
-      restore.hidden = true;
-      return;
-    }
 
     history.forEach((entry) => {
       const article = createElement('article', 'pcf-recent__card');
       const imageLink = createElement('a');
       imageLink.href = entry.url;
       imageLink.setAttribute('aria-label', entry.title);
-      appendImage(imageLink, entry);
+
+      if (entry.image) {
+        const image = createElement('img', 'pcf-recent__card-image');
+        image.src = entry.image;
+        image.alt = entry.title;
+        image.loading = 'lazy';
+        image.decoding = 'async';
+        image.addEventListener('error', () => image.replaceWith(createNoImage()), { once: true });
+        imageLink.appendChild(image);
+      } else {
+        imageLink.appendChild(createNoImage());
+      }
 
       const titleLink = createElement('a', 'pcf-recent__card-title', entry.title);
       titleLink.href = entry.url;
@@ -376,6 +274,7 @@
     });
 
     section.hidden = false;
+
     list.querySelectorAll('[data-recent-remove-id]').forEach((button) => {
       button.addEventListener('click', () => {
         const id = Number.parseInt(button.dataset.recentRemoveId || '', 10);
@@ -392,4 +291,112 @@
   window.addEventListener('storage', (event) => {
     if (event.key === STORAGE_KEY || event.key === VISIBILITY_KEY) renderHistory();
   });
+})();
+
+/* Independent anonymous engagement telemetry. No localStorage/cookie is used here. */
+(() => {
+  'use strict';
+
+  if (navigator.webdriver === true || window.__pcfEngagementTrackingStarted === true) return;
+  if (navigator.doNotTrack === '1' || window.doNotTrack === '1') return;
+  window.__pcfEngagementTrackingStarted = true;
+
+  const startedAt = Date.now();
+  const eventKey = (() => {
+    try {
+      if (window.crypto && typeof window.crypto.randomUUID === 'function') return window.crypto.randomUUID().toLowerCase();
+      if (window.crypto && typeof window.crypto.getRandomValues === 'function') {
+        const bytes = new Uint8Array(16);
+        window.crypto.getRandomValues(bytes);
+        return Array.from(bytes, (b) => b.toString(16).padStart(2, '0')).join('');
+      }
+    } catch (_) {}
+    return `${Date.now().toString(16)}-${Math.random().toString(16).slice(2)}-${Math.random().toString(16).slice(2)}`.slice(0, 64);
+  })();
+
+  let visibleSince = document.visibilityState === 'visible' ? Date.now() : 0;
+  let activeMs = 0;
+  let maxScroll = 0;
+  let lastSentDuration = 0;
+
+  const updateScroll = () => {
+    const doc = document.documentElement;
+    const body = document.body;
+    const height = Math.max(
+      doc ? doc.scrollHeight : 0,
+      body ? body.scrollHeight : 0,
+      window.innerHeight || 0
+    );
+    const denominator = Math.max(1, height - (window.innerHeight || 0));
+    const percent = denominator <= 1
+      ? 100
+      : Math.max(0, Math.min(100, Math.round(((window.scrollY || 0) / denominator) * 100)));
+    if (percent > maxScroll) maxScroll = percent;
+  };
+
+  const closeVisibleWindow = () => {
+    if (visibleSince > 0) {
+      activeMs += Math.max(0, Date.now() - visibleSince);
+      visibleSince = 0;
+    }
+  };
+
+  const openVisibleWindow = () => {
+    if (visibleSince === 0 && document.visibilityState === 'visible') visibleSince = Date.now();
+  };
+
+  const endpoint = (() => {
+    const path = window.location.pathname;
+    const slash = path.lastIndexOf('/');
+    return `${path.slice(0, slash + 1)}analytics_engagement.php`;
+  })();
+
+  const sendSnapshot = () => {
+    const now = Date.now();
+    const wasVisible = visibleSince > 0;
+    if (wasVisible) closeVisibleWindow();
+    updateScroll();
+
+    const duration = Math.max(0, Math.min(43200, Math.round((now - startedAt) / 1000)));
+    const active = Math.max(0, Math.min(duration, Math.round(activeMs / 1000)));
+    if (duration < 2 || duration === lastSentDuration) {
+      if (wasVisible && document.visibilityState === 'visible') openVisibleWindow();
+      return;
+    }
+    lastSentDuration = duration;
+
+    const data = new FormData();
+    data.append('event_key', eventKey);
+    data.append('path', window.location.pathname + window.location.search);
+    data.append('duration', String(duration));
+    data.append('active', String(active));
+    data.append('scroll', String(maxScroll));
+
+    if (!(navigator.sendBeacon && navigator.sendBeacon(endpoint, data)) && window.fetch) {
+      window.fetch(endpoint, {
+        method: 'POST',
+        body: data,
+        credentials: 'same-origin',
+        keepalive: true
+      }).catch(() => {});
+    }
+
+    if (wasVisible && document.visibilityState === 'visible') openVisibleWindow();
+  };
+
+  window.addEventListener('scroll', updateScroll, { passive: true });
+  window.addEventListener('pagehide', sendSnapshot);
+  document.addEventListener('visibilitychange', () => {
+    if (document.visibilityState === 'hidden') {
+      closeVisibleWindow();
+      sendSnapshot();
+    } else {
+      openVisibleWindow();
+    }
+  });
+  window.addEventListener('pageshow', openVisibleWindow);
+  window.setInterval(() => {
+    if (document.visibilityState === 'visible') sendSnapshot();
+  }, 60000);
+  updateScroll();
 })();

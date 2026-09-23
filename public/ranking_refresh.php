@@ -11,11 +11,10 @@ if (strtoupper((string)($_SERVER['REQUEST_METHOD'] ?? 'GET')) !== 'POST') {
     exit;
 }
 
-$expectedHost = strtolower((string)(parse_url(defined('BASE_URL') ? (string)BASE_URL : '', PHP_URL_HOST) ?: ''));
+$expectedHost = strtolower((string)(parse_url(defined('BASE_URL') ? (string)BASE_URL : '', PHP_URL_HOST) ?: 'pinkclub-sokumiru.com'));
 $originHost = strtolower((string)(parse_url((string)($_SERVER['HTTP_ORIGIN'] ?? ''), PHP_URL_HOST) ?: ''));
 $refererHost = strtolower((string)(parse_url((string)($_SERVER['HTTP_REFERER'] ?? ''), PHP_URL_HOST) ?: ''));
-if ($expectedHost === ''
-    || ($originHost === '' && $refererHost === '')
+if (($originHost === '' && $refererHost === '')
     || ($originHost !== '' && !hash_equals($expectedHost, $originHost))
     || ($refererHost !== '' && !hash_equals($expectedHost, $refererHost))) {
     http_response_code(204);
@@ -48,7 +47,9 @@ $lockPath = $lockDirectory . '/ranking-refresh-' . $refreshKey . '.lock';
 $cooldownPath = $lockDirectory . '/ranking-refresh-' . $refreshKey . '.cooldown';
 $lockHandle = @fopen($lockPath, 'c');
 if (!is_resource($lockHandle) || !@flock($lockHandle, LOCK_EX | LOCK_NB)) {
-    if (is_resource($lockHandle)) fclose($lockHandle);
+    if (is_resource($lockHandle)) {
+        fclose($lockHandle);
+    }
     http_response_code(204);
     exit;
 }

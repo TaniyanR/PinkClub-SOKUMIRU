@@ -3,7 +3,6 @@
 declare(strict_types=1);
 
 require_once __DIR__ . '/_helpers.php';
-
 $safeTextSetting = static function (string $key, string $default = ''): string {
     if (function_exists('front_safe_text_setting')) {
         return front_safe_text_setting($key, $default);
@@ -41,11 +40,9 @@ $copyrightYears = site_start_year() . '-' . $currentYear;
 ?>
   <?php $pageType = function_exists('ad_current_page_type') ? ad_current_page_type() : 'home'; ?>
   </div>
-  <?php if (site_setting_get('link.rss_display.pc_text_bottom', '1') === '1'): ?>
   <div class="site-main__rss only-pc">
     <?php render_shared_content_ad_row('content_bottom', $pageType); ?>
   </div>
-  <?php endif; ?>
   </main>
 </div>
 <button type="button" class="page-top-button" aria-label="トップに戻る">↑ トップへ</button>
@@ -59,11 +56,10 @@ $copyrightYears = site_start_year() . '-' . $currentYear;
 <?php endif; ?>
 <footer class="site-footer">
   <div class="site-footer__credit">
-    <a href="https://sokmil-ad.com/" target="_blank" rel="noopener nofollow"><img src="https://sokmil-ad.com/api/credit/135x18.gif" alt="WEB SERVICE BY SOKMIL" width="135" height="18"></a>
+    <a href="https://sokmil-ad.com/" target="_blank" rel="noopener"><img src="https://sokmil-ad.com/api/credit/135x18.gif" alt="WEB SERVICE BY SOKMIL" width="135" height="18"></a>
   </div>
   <div class="site-footer__copy">Copyright ©<?= e($copyrightYears) ?> <a href="<?= e(public_url('')) ?>"><?= e($siteName) ?></a> All Rights Reserved.</div>
 </footer>
-<script src="<?= e(asset_url('js/sample-image-modal.js')) ?>" defer></script>
 <script>
 (function () {
   var header = document.querySelector('.site-header');
@@ -221,7 +217,6 @@ $copyrightYears = site_start_year() . '-' . $currentYear;
 </script>
 <script>
 (function () {
-  if (navigator.doNotTrack === '1' || window.doNotTrack === '1' || navigator.globalPrivacyControl === true) return;
   var send = function (url, data) {
     if (navigator.sendBeacon && navigator.sendBeacon(url, data)) return true;
     if (window.fetch) {
@@ -233,16 +228,23 @@ $copyrightYears = site_start_year() . '-' . $currentYear;
   window.__pcfSendBeacon = send;
   if (window.__pcfAnalyticsSent === true) return;
   window.__pcfAnalyticsSent = true;
-  var data = new FormData();
-  data.append('path', window.location.pathname + window.location.search);
-  data.append('referrer', document.referrer || '');
-  try {
-    var params = new URLSearchParams(window.location.search);
-    data.append('ref', params.get('ref') || '');
-  } catch (e) {
-    data.append('ref', '');
-  }
-  send('<?= e(public_url('analytics.php')) ?>', data);
+  if (navigator.webdriver === true) return;
+  var path = window.location.pathname + window.location.search;
+  var token = <?= json_encode(analytics_beacon_token((string)($_SERVER['REQUEST_URI'] ?? '/')), JSON_UNESCAPED_SLASHES) ?>;
+  window.setTimeout(function () {
+    if (document.visibilityState !== 'visible') return;
+    var data = new FormData();
+    data.append('path', path);
+    data.append('token', token);
+    data.append('referrer', document.referrer || '');
+    try {
+      var params = new URLSearchParams(window.location.search);
+      data.append('ref', params.get('ref') || '');
+    } catch (e) {
+      data.append('ref', '');
+    }
+    send('<?= e(public_url('analytics.php')) ?>', data);
+  }, 2500);
 }());
 </script>
 <?php $rankingRefreshQueue = function_exists('pcf_public_ranking_refresh_queue') ? pcf_public_ranking_refresh_queue() : []; ?>

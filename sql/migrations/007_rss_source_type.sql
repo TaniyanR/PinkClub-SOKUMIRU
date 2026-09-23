@@ -29,7 +29,7 @@ CREATE TABLE IF NOT EXISTS rss_items (
   CONSTRAINT fk_rss_items_source FOREIGN KEY (source_id) REFERENCES rss_sources(id) ON DELETE CASCADE
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4;
 
-ALTER TABLE partner_rss ADD COLUMN IF NOT EXISTS show_rss TINYINT(1) NOT NULL DEFAULT 0;
+ALTER TABLE partner_rss ADD COLUMN IF NOT EXISTS show_rss TINYINT(1) NOT NULL DEFAULT 1;
 ALTER TABLE rss_sources ADD COLUMN IF NOT EXISTS source_type VARCHAR(32) NOT NULL DEFAULT 'general' AFTER feed_url;
 ALTER TABLE rss_sources ADD COLUMN IF NOT EXISTS source_ref_id BIGINT UNSIGNED NULL AFTER source_type;
 
@@ -48,5 +48,5 @@ UPDATE rss_sources rs
 INNER JOIN partner_rss pr ON pr.feed_url = rs.feed_url
 SET rs.source_type = 'partner_link',
     rs.source_ref_id = pr.id,
-    rs.is_enabled = COALESCE(pr.show_rss, 0),
+    rs.is_enabled = COALESCE(pr.show_rss, pr.is_enabled, 1),
     rs.updated_at = NOW();

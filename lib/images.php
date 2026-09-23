@@ -2,7 +2,7 @@
 
 declare(strict_types=1);
 
-/** Portrait cover supplied by the product provider; never substitute the landscape package/OGP. */
+/** Portrait cover supplied by SOKUMIRU; never substitute the landscape package/OGP. */
 function item_front_cover_url(array $item): string
 {
     $raw = json_decode((string)($item['raw_json'] ?? ''), true);

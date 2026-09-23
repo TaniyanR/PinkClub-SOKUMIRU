@@ -43,13 +43,13 @@ try {
 
     $pdo = db();
     $stmt = $pdo->prepare(
-        'INSERT INTO analytics_page_engagement '
-        . '(event_key, viewed_at, visitor_hash, path, duration_seconds, active_seconds, max_scroll_percent) '
-        . 'VALUES (:event_key, NOW(), :visitor, :path, :duration, :active, :scroll) '
-        . 'ON DUPLICATE KEY UPDATE '
-        . 'duration_seconds = GREATEST(duration_seconds, VALUES(duration_seconds)), '
-        . 'active_seconds = GREATEST(active_seconds, VALUES(active_seconds)), '
-        . 'max_scroll_percent = GREATEST(max_scroll_percent, VALUES(max_scroll_percent))'
+        'INSERT INTO analytics_page_engagement
+         (event_key, viewed_at, visitor_hash, path, duration_seconds, active_seconds, max_scroll_percent)
+         VALUES (:event_key, NOW(), :visitor, :path, :duration, :active, :scroll)
+         ON DUPLICATE KEY UPDATE
+           duration_seconds = GREATEST(duration_seconds, VALUES(duration_seconds)),
+           active_seconds = GREATEST(active_seconds, VALUES(active_seconds)),
+           max_scroll_percent = GREATEST(max_scroll_percent, VALUES(max_scroll_percent))'
     );
     $stmt->execute([
         ':event_key' => $eventKey,
@@ -68,7 +68,7 @@ try {
         $cleanup->execute([':cutoff' => $cutoff]);
     }
 } catch (Throwable $e) {
-    error_log('[analytics engagement] ' . $e->getMessage());
+    error_log('analytics engagement failed: ' . $e->getMessage());
 }
 
 http_response_code(204);

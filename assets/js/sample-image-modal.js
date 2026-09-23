@@ -14,7 +14,6 @@
 
   function buildModal() {
     if (modal) return;
-
     modal = document.createElement('div');
     modal.className = 'sample-image-modal';
     modal.setAttribute('aria-hidden', 'true');
@@ -34,7 +33,6 @@
         '<div class="sample-image-modal__thumbs" aria-label="サンプル画像一覧"></div>' +
       '</section>';
     document.body.appendChild(modal);
-
     mainImage = modal.querySelector('.sample-image-modal__main');
     thumbs = modal.querySelector('.sample-image-modal__thumbs');
     titleNode = modal.querySelector('.sample-image-modal__title');
@@ -81,9 +79,6 @@
   }
 
   function openModal(trigger) {
-    var url = trigger.dataset.sampleImagesUrl || '';
-    if (!url) return;
-
     buildModal();
     returnFocus = trigger;
     images = [];
@@ -98,18 +93,13 @@
     document.body.classList.add('sample-image-modal-open');
     modal.querySelector('.sample-image-modal__close').focus();
 
-    fetch(url, {
-      credentials: 'same-origin',
-      headers: { Accept: 'application/json' }
-    })
+    fetch(trigger.dataset.sampleImagesUrl, { credentials: 'same-origin', headers: { Accept: 'application/json' } })
       .then(function (response) {
         if (!response.ok) throw new Error('sample image request failed');
         return response.json();
       })
       .then(function (payload) {
-        images = Array.isArray(payload.images)
-          ? payload.images.filter(function (value) { return typeof value === 'string' && /^https?:\/\//i.test(value); })
-          : [];
+        images = Array.isArray(payload.images) ? payload.images.filter(function (url) { return /^https?:\/\//i.test(url); }) : [];
         titleNode.textContent = payload.title || trigger.dataset.sampleImagesTitle || 'サンプル画像';
         if (!images.length) {
           statusNode.textContent = '表示できるサンプル画像がありません。';
@@ -134,11 +124,10 @@
 
   document.addEventListener('click', function (event) {
     var trigger = event.target.closest('.sample-image-trigger');
-    if (!trigger || trigger.disabled || !trigger.dataset.sampleImagesUrl) return;
+    if (!trigger || !trigger.dataset.sampleImagesUrl) return;
     event.preventDefault();
     openModal(trigger);
   });
-
   document.addEventListener('keydown', function (event) {
     if (!modal || !modal.classList.contains('is-open')) return;
     if (event.key === 'Escape') closeModal();

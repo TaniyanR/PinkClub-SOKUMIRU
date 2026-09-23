@@ -2,6 +2,23 @@
 
 declare(strict_types=1);
 
+function pcf_public_request_is_mobile(): bool
+{
+    static $isMobile = null;
+    if (is_bool($isMobile)) {
+        return $isMobile;
+    }
+
+    $viewportCookie = (string)($_COOKIE['pcf_viewport'] ?? '');
+    $clientHintMobile = (string)($_SERVER['HTTP_SEC_CH_UA_MOBILE'] ?? '');
+    $userAgent = (string)($_SERVER['HTTP_USER_AGENT'] ?? '');
+    $isMobile = $viewportCookie === 'sp'
+        || $clientHintMobile === '?1'
+        || ($userAgent !== '' && preg_match('/Android.*Mobile|iPhone|iPod|Windows Phone|BlackBerry|webOS/i', $userAgent) === 1);
+
+    return $isMobile;
+}
+
 function pcf_public_page_cache_start(int $ttlSeconds = 120): void
 {
     if (PHP_SAPI === 'cli' || headers_sent()) {
@@ -26,25 +43,28 @@ function pcf_public_page_cache_start(int $ttlSeconds = 120): void
         'reset_password.php',
         'setup_check.php',
         'search.php',
-        'recent_items_validate.php',
         'ranking_refresh.php',
         'link_apply.php',
         'deletion_request_submit.php',
-        'page.php',
     ];
-    // 本文だけを保存するページキャッシュから、非HTML・リクエスト固有処理を除外する。
+    // The page cache stores only response bodies. Non-HTML endpoints must send
+    // their own Content-Type, and request-specific endpoints must execute on
+    // every request.
     $cacheBypassScripts = [
         'recommendations.php',
-        'recently_viewed_items.php',
+        'recent_images.php',
         'feed.php',
         'feed-10.php',
         'feed-60.php',
         'feed-free-10.php',
         'feed-free-60.php',
     ];
+    $pageSlug = trim((string)($_GET['slug'] ?? ''));
+    $isContactPage = $scriptName === 'page.php' && in_array($pageSlug, ['que', 'contact'], true);
     $isSampleImagesJson = $scriptName === 'sample_images.php'
         && strtolower(trim((string)($_GET['format'] ?? ''))) === 'json';
     $isTrackedLinkVisit = $scriptName === 'links.php' && (int)($_GET['from'] ?? 0) > 0;
+    $isExcludedScript = in_array($scriptName, $excludedScripts, true) || $isContactPage;
     $mustBypassCache = in_array($scriptName, $cacheBypassScripts, true)
         || $isSampleImagesJson || $isTrackedLinkVisit;
 
@@ -52,11 +72,11 @@ function pcf_public_page_cache_start(int $ttlSeconds = 120): void
         str_contains($requestPath, '/admin/')
         || str_contains($requestPath, '/api/')
         || $scriptName === 'page_view_beacon.php'
-        || in_array($scriptName, $excludedScripts, true)
+        || $isExcludedScript
         || $mustBypassCache
         || isset($_GET['pcf_nocache'])
     ) {
-        if (in_array($scriptName, $excludedScripts, true)) {
+        if ($isExcludedScript) {
             header('Cache-Control: private, no-store, max-age=0');
             header('Pragma: no-cache');
         }
@@ -71,13 +91,6 @@ function pcf_public_page_cache_start(int $ttlSeconds = 120): void
     if (!is_writable($cacheDirectory)) {
         return;
     }
-
-    $viewportCookie = (string)($_COOKIE['pcf_viewport'] ?? '');
-    $clientHintMobile = (string)($_SERVER['HTTP_SEC_CH_UA_MOBILE'] ?? '');
-    $userAgent = (string)($_SERVER['HTTP_USER_AGENT'] ?? '');
-    $isMobile = $viewportCookie === 'sp'
-        || $clientHintMobile === '?1'
-        || ($userAgent !== '' && preg_match('/Android.*Mobile|iPhone|iPod|Windows Phone|BlackBerry|webOS/i', $userAgent));
 
     $baseParts = parse_url(defined('BASE_URL') ? (string)BASE_URL : '');
     $cacheHost = is_array($baseParts) ? strtolower((string)($baseParts['host'] ?? '')) : '';
@@ -129,9 +142,9 @@ function pcf_public_page_cache_start(int $ttlSeconds = 120): void
     if ($normalizedQuery !== '') {
         $normalizedRequestUri .= '?' . $normalizedQuery;
     }
-    $cacheGeneration = $scriptName === 'item.php' ? 'v4-social-card' : 'v3';
+    $cacheGeneration = $scriptName === 'item.php' ? 'v6-social-card' : 'v5';
     if ($scriptName === 'index.php') {
-        $cacheGeneration = 'v6-home-section-layout';
+        $cacheGeneration = 'v7-home-visible-products';
     }
     $cacheKey = hash('sha256', $cacheGeneration . '|' . $cacheAuthority . '|' . $variant . '|' . $normalizedRequestUri);
     $cacheFile = $cacheDirectory . '/' . $cacheKey . '.html';

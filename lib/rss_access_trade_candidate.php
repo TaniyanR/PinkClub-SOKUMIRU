@@ -3,10 +3,40 @@ declare(strict_types=1);
 
 require_once __DIR__ . '/db.php';
 
+function rss_trade_candidate_http_url(string $value): string
+{
+    if (function_exists('rss_http_url')) {
+        return rss_http_url($value);
+    }
+
+    $url = trim($value);
+    if ($url === '' || str_contains($url, "\r") || str_contains($url, "\n")) {
+        return '';
+    }
+    if (str_starts_with($url, '//')) {
+        $url = 'https:' . $url;
+    }
+    if (filter_var($url, FILTER_VALIDATE_URL) === false) {
+        return '';
+    }
+    $scheme = strtolower((string)(parse_url($url, PHP_URL_SCHEME) ?: ''));
+    return in_array($scheme, ['http', 'https'], true) ? $url : '';
+}
+
+/**
+ * Disable stale/legacy partner RSS sources without deleting stored data.
+ *
+ * A partner is treated as having one current RSS row: the latest enabled row
+ * by updated_at/id. Sources for an edited old URL or an older duplicate
+ * partner_rss row are disabled so they cannot consume refresh slots or leak
+ * old articles back into display selection.
+ */
 function rss_trade_disable_stale_sources(): void
 {
     static $done = false;
-    if ($done) return;
+    if ($done) {
+        return;
+    }
     $done = true;
 
     try {
@@ -18,12 +48,12 @@ function rss_trade_disable_stale_sources(): void
             . 'AND rs.is_enabled = 1 '
             . 'AND ( '
             . 'TRIM(COALESCE(pr.feed_url, "")) = "" '
-            . 'OR COALESCE(pr.show_rss, 0) <> 1 '
+            . 'OR COALESCE(pr.show_rss, pr.is_enabled, 1) <> 1 '
             . 'OR rs.feed_url <> pr.feed_url '
             . 'OR EXISTS ( '
             . 'SELECT 1 FROM partner_rss newer '
             . 'WHERE newer.partner_site_id = pr.partner_site_id '
-            . 'AND COALESCE(newer.show_rss, 0) = 1 '
+            . 'AND COALESCE(newer.show_rss, newer.is_enabled, 1) = 1 '
             . 'AND TRIM(COALESCE(newer.feed_url, "")) <> "" '
             . 'AND (newer.updated_at > pr.updated_at OR (newer.updated_at = pr.updated_at AND newer.id > pr.id)) '
             . ') '
@@ -34,6 +64,15 @@ function rss_trade_disable_stale_sources(): void
     }
 }
 
+/**
+ * Build a candidate pool per partner site.
+ *
+ * Important rules:
+ * - one logical RSS feed per partner site for display purposes
+ * - ignore stale rss_sources left behind after an RSS URL edit
+ * - never let registration order or update volume crowd out another site
+ * - keep each site's candidate limit independent
+ */
 function rss_trade_candidate_pool(int $perSiteLimit = 40, bool $requireImage = false, int $days = 14): array
 {
     $perSiteLimit = max(1, min(200, $perSiteLimit));
@@ -46,7 +85,7 @@ function rss_trade_candidate_pool(int $perSiteLimit = 40, bool $requireImage = f
             . 'FROM partner_sites ps '
             . 'INNER JOIN partner_rss pr ON pr.partner_site_id = ps.id '
             . 'WHERE ps.is_enabled = 1 '
-            . 'AND COALESCE(pr.show_rss, 0) = 1 '
+            . 'AND COALESCE(pr.show_rss, pr.is_enabled, 1) = 1 '
             . 'AND TRIM(COALESCE(pr.feed_url, "")) <> "" '
             . 'ORDER BY ps.id ASC, pr.updated_at DESC, pr.id DESC'
         )->fetchAll(PDO::FETCH_ASSOC) ?: [];
@@ -55,28 +94,40 @@ function rss_trade_candidate_pool(int $perSiteLimit = 40, bool $requireImage = f
         return [];
     }
 
+    // The admin UI exposes one RSS URL per partner. Historical duplicate rows
+    // may still exist, so use only the most recently updated enabled row.
     $feedBySite = [];
     foreach ($rows as $row) {
         $siteId = (int)($row['partner_site_id'] ?? 0);
-        if ($siteId <= 0 || isset($feedBySite[$siteId])) continue;
+        if ($siteId <= 0 || isset($feedBySite[$siteId])) {
+            continue;
+        }
         $feedBySite[$siteId] = [
             'rss_id' => (int)($row['partner_rss_id'] ?? 0),
             'feed_url' => trim((string)($row['feed_url'] ?? '')),
         ];
     }
-    if ($feedBySite === []) return [];
+
+    if ($feedBySite === []) {
+        return [];
+    }
 
     $siteIds = array_keys($feedBySite);
     shuffle($siteIds);
+
     $all = [];
     $seen = [];
 
     foreach ($siteIds as $partnerSiteId) {
         $feed = $feedBySite[$partnerSiteId] ?? null;
-        if (!is_array($feed)) continue;
+        if (!is_array($feed)) {
+            continue;
+        }
         $rssId = (int)($feed['rss_id'] ?? 0);
         $feedUrl = trim((string)($feed['feed_url'] ?? ''));
-        if ($rssId <= 0 || $feedUrl === '') continue;
+        if ($rssId <= 0 || $feedUrl === '') {
+            continue;
+        }
 
         try {
             $sourceStmt = db()->prepare(
@@ -89,7 +140,9 @@ function rss_trade_candidate_pool(int $perSiteLimit = 40, bool $requireImage = f
             );
             $sourceStmt->execute([':rss_id' => $rssId, ':feed_url' => $feedUrl]);
             $sourceId = (int)($sourceStmt->fetchColumn() ?: 0);
-            if ($sourceId <= 0) continue;
+            if ($sourceId <= 0) {
+                continue;
+            }
 
             $imageClause = $requireImage ? " AND COALESCE(NULLIF(TRIM(ri.image_url), ''), '') <> ''" : '';
             $sql = 'SELECT ri.source_id, rs.name AS source_name, ri.title, ri.url, ri.guid, ri.published_at, ri.image_url '
@@ -103,17 +156,26 @@ function rss_trade_candidate_pool(int $perSiteLimit = 40, bool $requireImage = f
             $items = $stmt->fetchAll(PDO::FETCH_ASSOC) ?: [];
 
             foreach ($items as $row) {
-                $url = trim((string)($row['url'] ?? ''));
+                $url = rss_trade_candidate_http_url((string)($row['url'] ?? ''));
+                if ($url === '') {
+                    continue;
+                }
+                $imageUrl = rss_trade_candidate_http_url((string)($row['image_url'] ?? ''));
+                if ($requireImage && $imageUrl === '') {
+                    continue;
+                }
                 $guid = trim((string)($row['guid'] ?? ''));
-                $dedupe = $url !== '' ? 'url|' . mb_strtolower($url) : ($guid !== '' ? 'guid|' . mb_strtolower($guid) : '');
-                if ($dedupe !== '' && isset($seen[$dedupe])) continue;
-                if ($dedupe !== '') $seen[$dedupe] = true;
+                $dedupe = 'url|' . mb_strtolower($url);
+                if (isset($seen[$dedupe])) {
+                    continue;
+                }
+                $seen[$dedupe] = true;
                 $all[] = [
                     'title' => (string)($row['title'] ?? ''),
                     'link' => $url,
                     'guid' => $guid,
                     'published_at' => (string)($row['published_at'] ?? ''),
-                    'image_url' => trim((string)($row['image_url'] ?? '')),
+                    'image_url' => $imageUrl,
                     'source_id' => $sourceId,
                     'source_name' => (string)($row['source_name'] ?? ''),
                     'partner_site_id' => (int)$partnerSiteId,
@@ -124,6 +186,8 @@ function rss_trade_candidate_pool(int $perSiteLimit = 40, bool $requireImage = f
         }
     }
 
-    if (count($all) > 1) shuffle($all);
+    if (count($all) > 1) {
+        shuffle($all);
+    }
     return $all;
 }

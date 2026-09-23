@@ -6,6 +6,9 @@ require_once __DIR__ . '/../../lib/site_settings.php';
 
 if (headers_sent() === false) {
     header('X-Robots-Tag: noindex, nofollow');
+    header('Cache-Control: private, no-store, max-age=0');
+    header('Pragma: no-cache');
+    header('Referrer-Policy: no-referrer');
 }
 
 $siteTitle = trim(site_title_setting(''));
@@ -15,10 +18,8 @@ if ($siteTitle === '') {
 $rawPageTitle = isset($pageTitle) && $pageTitle !== '' ? (string)$pageTitle : 'ログイン';
 $fullTitle = $rawPageTitle . ' | ' . $siteTitle;
 $faviconPath = trim(site_setting_get('site.favicon_path', ''));
-$faviconUrl = site_media_public_url('favicon') ?: ($faviconPath !== '' ? public_versioned_url($faviconPath) : '');
+$faviconUrl = $faviconPath !== '' ? public_versioned_url($faviconPath) : '';
 $faviconType = strtolower((string)pathinfo($faviconPath, PATHINFO_EXTENSION)) === 'png' ? 'image/png' : 'image/x-icon';
-$faviconMeta = site_media_meta_get('favicon');
-if (is_array($faviconMeta)) $faviconType = (string)$faviconMeta['mime_type'];
 ?>
 <!DOCTYPE html>
 <html lang="ja">
@@ -34,7 +35,7 @@ if (is_array($faviconMeta)) $faviconType = (string)$faviconMeta['mime_type'];
     <?php endif; ?>
     <link rel="stylesheet" href="<?php echo e(asset_url('css/style.css')); ?>">
 </head>
-<body>
+<body class="login-page">
 <div class="login-shell">
     <?php if (!(isset($hideLoginHeaderBrand) && $hideLoginHeaderBrand === true)) : ?>
         <header class="login-header">

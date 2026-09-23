@@ -58,7 +58,6 @@ if (($_SERVER['REQUEST_METHOD'] ?? 'GET') === 'POST') {
 }
 
 $pageTitle = '相互リンク申請';
-$robotsMeta = 'noindex,nofollow';
 include __DIR__ . '/partials/header.php';
 ?>
 <section class="block">
